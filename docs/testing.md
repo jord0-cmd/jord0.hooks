@@ -32,6 +32,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a commented-out `--help` handler does not count | comment stripping | red |
 | a trailing comment or a usage line is not a handler | the quote-aware comment cut, the anchored case arm | red, one mutation each |
 | a script with no `#!` is still a script | interpreter files, executable text, the binary sniff | red, one mutation each |
+| a delete inside `.git` is named as git's own data | the exemption, the work tree above, the sweep, the lock list | red, one mutation each |
 | a grep pattern is not a read | per-tool operand parsing | red |
 | a local read does not vouch for a remote script | matching by path and host | red |
 | `Now all tests pass.` is a claim | whole-word negation | red, three tests |

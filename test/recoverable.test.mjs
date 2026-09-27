@@ -401,6 +401,29 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.equal(await judges.git(words("git worktree remove ../wt"), ctx()), null); // git itself refuses
   });
 
+  describe("git's own data, inside .git", () => {
+    for (const cmd of ["rm -f .git/index", "rm -rf .git/objects", "rm -rf .git/refs", "rm -f .git/HEAD"]) {
+      it(`names it: ${cmd}`, async () => {
+        const v = await judges.rm(words(cmd), ctx());
+        assert.equal(v?.decision, "ask");
+        assert.match(v.reason, new RegExp(`git's own data \\(${cmd.split(" ").at(-1).replace(".", "\\.")}\\)`));
+        assert.equal((await judges.rm(words(cmd), ctx("agent-1")))?.decision, "deny");
+      });
+    }
+
+    it("leaves a stale lock and the last fetch's record alone", async () => {
+      writeFileSync(join(tree, ".git", "index.lock"), "");
+      assert.equal(await judges.rm(words("rm -f .git/index.lock"), ctx()), null);
+      assert.equal(await judges.rm(words("rm -f .git/FETCH_HEAD"), ctx()), null);
+      assert.equal(await judges.find(words("find .git -name *.lock -delete"), ctx()), null);
+    });
+
+    it("names it when a find sweep reaches inside .git", async () => {
+      assert.match((await judges.find(words("find . -name index -delete"), ctx()))?.reason ?? "", /git's own data \(\.git\/index\)/);
+      assert.equal((await judges.find(words("find .git -delete"), ctx()))?.decision, "ask");
+    });
+  });
+
   describe("a git command that names its repository", () => {
     // The command runs from a clean directory outside the dirty tree.
     let away;
