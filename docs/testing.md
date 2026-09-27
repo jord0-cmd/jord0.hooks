@@ -27,6 +27,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a trailing heredoc goes to the last pipeline stage | the last-stage rule | red |
 | every leaked name is reported, not only the first | (two planted leaks) | both reported |
 | git's pins reach it on git 2.30 | pins moved back off the command line | red |
+| no repository hook can run | the `core.hooksPath` pin, checked on every call | red |
 | a broken repository config is a failure, not silence | any git error read as "not a repository" | red |
 | a required filter does not kill `git status` | `required=false` beside the blank | red |
 | a commented-out `--help` handler does not count | comment stripping | red |

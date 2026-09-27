@@ -234,6 +234,7 @@ describe("judges: asking git without running the repository's programs", () => {
     assert.ok(calls.length >= 3, calls.join("\n"));
     for (const call of calls) {
       assert.match(call, /-c core\.fsmonitor= /, call);
+      assert.match(call, /-c core\.hooksPath=\/dev\/null /, call);
       assert.match(call, /-c log\.showSignature=false /, call);
     }
   });
