@@ -45,6 +45,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | "The tests were not run" is an admission, "I did not run into any issues" is not | the admission vocabulary and its guard | red, six tests |
 | a stray error after the answer still exits 0 | the synchronous write and exit | red, two tests |
 | a git older than 2.26 is a probe failure, never a guess | the version floor | red |
+| `cat > app.py <<EOF`, `tee` and `git apply` are edits, `tee test-output` is not | shell writes, source extensions only | red, one mutation each |
 | several files deleted on the main thread | the one-file exemption | red |
 | a magic pathspec judges the whole tree | pathspec magic | red |
 | deleting `.git` counts commits on no remote | the history check | red |

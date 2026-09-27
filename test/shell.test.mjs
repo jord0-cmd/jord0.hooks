@@ -66,6 +66,15 @@ describe("listing commands", () => {
     assert.equal(cmd.stdinFile, "list of files.txt");
   });
 
+  it("lists the files a command's output is redirected into, and not a duplicated descriptor", async () => {
+    const writes = async (text) => (await commands(text)).map((c) => c.writes);
+    assert.deepEqual(await writes("cat > app.py <<'EOF'\nx = 1\nEOF"), [["app.py"]]);
+    assert.deepEqual(await writes('echo x >> lib/a.ts; cmd &> "my out.py"; cmd 2> err.py; cmd >| f.rs'), [
+      ["lib/a.ts"], ["my out.py"], ["err.py"], ["f.rs"],
+    ]); // prettier-ignore
+    assert.deepEqual(await writes("cmd >&2; xargs rm < list.txt"), [[], []]);
+  });
+
   it("does not mistake an output redirect for stdin", async () => {
     const [cmd] = await commands("echo hi > out.txt 2>&1");
     assert.equal(cmd.stdinRedirected, false);

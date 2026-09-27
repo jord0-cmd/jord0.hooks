@@ -324,6 +324,24 @@ describe("round 1b: DONE-GATE", () => {
     }
   });
 
+  for (const [command, what] of [
+    ["cat > app.py <<'EOF'\nx = 1\nEOF", "app.py was edited"],
+    ["echo 'x' | tee src/a.ts", "a.ts was edited"],
+    ["git apply fix.patch", "a patch was applied with `git apply`"],
+    ["patch -p1 < fix.patch", "a patch was applied with `patch`"],
+  ]) {
+    it(`counts a source file written from the shell: ${command.split("\n")[0]}`, async () => {
+      const out = await verdict(stop([bash(command)], "Done."));
+      assert.match(out?.feedback ?? "", new RegExp(`${what.replace(/[.*+?^${}()|[\]\\`]/g, "\\$&")} and no test has run since`));
+    });
+  }
+
+  for (const command of ["npm test 2>&1 | tee test-output", "pytest -q > report.json", "echo hi > notes.md", "git apply --check fix.patch"]) {
+    it(`does not count an output or a dry run as an edit: ${command}`, async () => {
+      assert.equal(await verdict(stop([bash(command, { output: "3 passed" })], "Done.")), null);
+    });
+  }
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);
