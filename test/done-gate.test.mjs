@@ -271,6 +271,24 @@ describe("round 1b: DONE-GATE", () => {
     });
   }
 
+  const runners = ["pnpm vitest run", "yarn jest --ci", "bun vitest", "bazel test //...", "sbt clean test", "stack test", "cabal test", "meson test -C build"];
+  for (const command of runners) {
+    it(`recognises ${command}`, () => {
+      assert.equal(isTestCommand(command.split(" ")), true);
+    });
+  }
+  it("recognises sbt's quoted task, and not a build", () => {
+    assert.equal(isTestCommand(["sbt", "testOnly com.x.Y"]), true);
+    for (const command of ["npm vitest", "bazel build //...", "sbt compile", "pnpm install"]) {
+      assert.equal(isTestCommand(command.split(" ")), false, command);
+    }
+  });
+
+  it("names the variable for a test command it does not know", async () => {
+    const out = await verdict(stop([edit("/w/a.py")], "Done."));
+    assert.match(out.feedback, /can be named in JORD0_DONE_GATE_COMMANDS/);
+  });
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);
