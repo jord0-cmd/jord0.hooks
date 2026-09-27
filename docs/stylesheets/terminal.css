@@ -1,0 +1,79 @@
+/* jord0.hooks: the terminal of jord0.skills, in clay phosphor instead of green.
+   Same bones, different phosphor, so the two sites read as one family. */
+
+:root,
+[data-md-color-scheme="slate"] {
+  --clay: #d97757;
+  --amber: #ffb000;
+  --ground: #0d1117;
+  --well: #0a0d12;
+  --panel: #151b23;
+  --rule: #2a313b;
+  --ink: #c9c2b8;
+  --bright: #efe9e1;
+  --muted: #8b949e;
+  --allow: #3fb950;
+  --deny: #f85149;
+  --glow: 0 0 10px rgba(217, 119, 87, 0.45);
+
+  --md-default-bg-color: var(--ground);
+  --md-default-fg-color: var(--ink);
+  --md-default-fg-color--light: var(--muted);
+  --md-primary-fg-color: var(--ground);
+  --md-primary-bg-color: var(--bright);
+  --md-accent-fg-color: var(--clay);
+  --md-typeset-a-color: var(--clay);
+  --md-code-bg-color: var(--well);
+  --md-code-fg-color: var(--bright);
+  --md-footer-bg-color: var(--ground);
+  --md-footer-bg-color--dark: var(--ground);
+}
+
+/* Header and tabs */
+.md-header, .md-tabs { background: var(--ground); border-bottom: 1px solid var(--rule); }
+.md-header__title { font-weight: 800; color: var(--bright); }
+.md-header__button.md-logo, .md-header__button.md-logo svg { color: var(--clay); fill: var(--clay); }
+.md-tabs__link { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); opacity: 1; }
+.md-tabs__link:hover { color: var(--bright); }
+.md-tabs__link--active { color: var(--clay); }
+
+/* Sidebar */
+.md-nav__link { color: var(--muted); }
+.md-nav__link:hover { color: var(--bright); }
+.md-nav__link--active { color: var(--clay); font-weight: 800; }
+
+/* Type */
+.md-typeset h1 { color: var(--clay); font-weight: 800; letter-spacing: -0.01em; }
+.md-typeset h2, .md-typeset h3 { color: var(--bright); font-weight: 800; }
+.md-typeset a { text-decoration: none; transition: text-shadow 0.2s ease; }
+.md-typeset a:hover { text-shadow: var(--glow); }
+.md-typeset a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* Code: the well of the terminal, square corners */
+.md-typeset pre > code, .md-typeset .highlight pre { border-radius: 0; }
+.md-typeset .highlight pre { background: var(--well); border: 1px solid var(--rule); }
+.md-typeset :not(pre) > code { background: var(--panel); color: var(--bright); border-radius: 0; }
+
+/* Tables */
+.md-typeset table:not([class]) { border: 1px solid var(--rule); border-radius: 0; font-size: 0.72rem; }
+.md-typeset table:not([class]) th { background: var(--panel); color: var(--amber); font-weight: 800; }
+.md-typeset table:not([class]) td { border-top: 1px solid var(--rule); }
+
+/* Admonitions: one rail colour each, square */
+.md-typeset .admonition, .md-typeset details { border-radius: 0; background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--clay); box-shadow: none; }
+.md-typeset .admonition.warning, .md-typeset details.warning { border-left-color: var(--amber); }
+.md-typeset .admonition.danger, .md-typeset details.danger { border-left-color: var(--deny); }
+.md-typeset .admonition-title, .md-typeset summary { background: transparent !important; font-weight: 800; }
+
+/* The "stops this" callout on every hook page */
+.md-typeset .stops { border: 1px solid var(--amber); padding: 0.8rem 1rem; margin: 1.2rem 0; background: var(--well); }
+.md-typeset .stops strong { color: var(--amber); letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.7rem; display: block; }
+
+/* Decision tags: colour means the decision, and nothing else */
+.md-typeset .tag { display: inline-block; padding: 0 0.45em; border: 1px solid currentColor; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; }
+.md-typeset .tag.ask { color: var(--amber); }
+.md-typeset .tag.deny { color: var(--deny); }
+.md-typeset .tag.silent { color: var(--muted); }
+.md-typeset .tag.event { color: var(--clay); }
+
+@media (prefers-reduced-motion: reduce) { .md-typeset a { transition: none; } }

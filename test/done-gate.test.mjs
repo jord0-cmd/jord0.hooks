@@ -39,7 +39,7 @@ describe("DONE-GATE refuses", () => {
   it("when a failing run was piped into tail, which hid its exit status", async () => {
     const steps = [edit("/w/m.py"), bash("pytest -q | tail -3", { output: "3 passed, 2 failed in 0.4s" })];
     const out = await verdict(stop(steps, "Done."));
-    assert.match(out.feedback, /“2 failed”; the pipe hid the exit status/);
+    assert.match(out.feedback, /“2 failed”, and the pipe hid the exit status/);
   });
 
   it("an in-place sed edit counts as a code edit", async () => {

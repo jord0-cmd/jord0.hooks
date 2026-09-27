@@ -106,7 +106,7 @@ describe("listing commands", () => {
 });
 
 describe("resolving words", () => {
-  const context = { cwd: "/work", home: "/home/me", env: { TMPDIR: "/tmp", X: "from-env" } };
+  const context = { cwd: "/work", home: "/home/tester", env: { TMPDIR: "/tmp", X: "from-env" } };
 
   it("substitutes what can be known", () => {
     const vars = new Map([["S", "$X/sub"]]);
@@ -114,7 +114,7 @@ describe("resolving words", () => {
       text: "from-env/sub/from-env//work",
       unknown: false,
     });
-    assert.equal(resolveWord("~/notes", context).text, "/home/me/notes");
+    assert.equal(resolveWord("~/notes", context).text, "/home/tester/notes");
     assert.equal(resolveWord("$(pwd)/x", context).text, "/work/x");
     assert.equal(resolveWord("$(mktemp -d)", context).text, "/tmp/mktemp-not-yet-created");
   });

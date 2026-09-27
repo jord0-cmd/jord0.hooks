@@ -1,0 +1,65 @@
+site_name: jord0.hooks
+site_url: https://jord0-cmd.github.io/jord0.hooks
+site_description: "Three Claude Code hooks that stop three failures that already happened."
+site_author: jord0.cmd
+
+repo_url: https://github.com/jord0-cmd/jord0.hooks
+repo_name: jord0-cmd/jord0.hooks
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: custom
+    accent: custom
+  font:
+    text: JetBrains Mono
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/console
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+    - toc.follow
+
+extra_css:
+  - stylesheets/terminal.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jord0-cmd
+  generator: false
+
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Hooks:
+    - DONE-GATE: hooks/done-gate.md
+    - RECOVERABLE: hooks/recoverable.md
+    - FLAG-PROBE: hooks/flag-probe.md
+  - How hooks actually work: how-hooks-work.md
+  - How this is tested: testing.md
