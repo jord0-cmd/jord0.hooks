@@ -318,6 +318,14 @@ describe("judges: round 1 of review", () => {
   });
 });
 
+describe("the hook: a malformed payload", () => {
+  it("asks when the payload carries no command, never stays silent", async () => {
+    const result = await runHook("recoverable", { tool_name: "Bash", tool_input: {}, cwd: tree }, { cwd: tree });
+    assert.equal(decisionOf(result.answer), "ask");
+    assert.match(reasonOf(result.answer), /no tool_input\.command string/); // not the failure path
+  });
+});
+
 // ─── The whole hook: the shapes the dispatcher must see through ─────────────────────────
 
 async function hook(command, { agent = false, cwd = tree } = {}) {
