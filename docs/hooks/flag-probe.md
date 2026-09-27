@@ -48,5 +48,6 @@ If you want Claude to learn tools by probing them, turn the plugin off in that p
 
 - A remote script can only be matched by name, since its source is on the other machine.
 - A script that handles help in a way these patterns do not recognise is refused until it has been read once. The fix still costs one command.
+- A command the grammar cannot parse (`cat <<EOF; ./deploy.sh --help` is valid bash that it cannot) hides which program is asked. If it carries a help flag, the call is asked about, and denied to a subagent.
 
 Tests: `test/flag-probe.test.mjs`.

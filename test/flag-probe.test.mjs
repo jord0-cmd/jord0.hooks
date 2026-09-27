@@ -198,6 +198,23 @@ describe("round 1 of review: spellings that used to walk past", () => {
   });
 });
 
+describe("round 1b: a command the grammar cannot parse", () => {
+  // Valid bash that runs the probe; the grammar cannot parse a heredoc opened before `;`.
+  const hidden = "cat <<EOF; ./deploy.sh --help\nbody\nEOF";
+
+  it("asks about a help flag it cannot place, and denies a subagent", async () => {
+    const { decision, reason } = await decide(hidden);
+    assert.equal(decision, "ask");
+    assert.match(reason, /cannot be parsed and it carries a help flag/);
+    const payload = { tool_name: "Bash", tool_input: { command: hidden }, cwd: dir, agent_id: "agent-1", transcript_path: transcript([]) };
+    assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "deny");
+  });
+
+  it("stays silent when the unparsed command carries no help flag", async () => {
+    assert.equal((await decide("cat <<EOF; ./deploy.sh --verbose\nbody\nEOF")).decision, "silent");
+  });
+});
+
 describe("round 1 of review: which read vouches for which script", () => {
   it("a local read never vouches for a remote script of the same name", async () => {
     const history = [{ tool: "Read", input: { file_path: join(dir, "gen-config.sh") } }];

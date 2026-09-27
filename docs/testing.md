@@ -39,6 +39,11 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a magic pathspec judges the whole tree | pathspec magic | red |
 | deleting `.git` counts commits on no remote | the history check | red |
 | a symlinked working directory still asks | resolving the real directory | red |
+| a glob pathspec (`git checkout -- "*.py"`) judges the whole tree | the glob as an open-ended set | red, four tests |
+| `find wip -print -delete` is dry-run cleanly | dropping the printing predicates | red, five tests |
+| an unresolvable line in an xargs list file is judged | where it runs | red |
+| `time { rm -rf wip; }` and a redirection's `$( … )` hide no command | the reserved word blanked, redirections walked | red, three tests |
+| a command the grammar cannot parse is not cleared | the parse-error check, in each hook | red, three tests |
 
 One of them lied first.
 

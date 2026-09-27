@@ -29,7 +29,7 @@ Read [Install](install.md) first. Installing is silent, and the hooks fire in ev
 
 **No guard says allow.** In Claude Code, `allow` skips your permission prompt. A guard with no objection says nothing at all, and your own settings decide.
 
-**Commands are parsed, never split.** tree-sitter's bash grammar finds every command, inside `( … )`, `if … then`, `$( … )` and heredocs fed to a shell. A commit message that mentions `rm -rf` is one quoted word.
+**Commands are parsed, never split.** tree-sitter's bash grammar finds the commands inside `( … )`, `if … then`, `$( … )`, a redirection and a heredoc fed to a shell. A commit message that mentions `rm -rf` is one quoted word. A command the grammar cannot parse counts as unread, never as clean.
 
 ## Where they came from
 

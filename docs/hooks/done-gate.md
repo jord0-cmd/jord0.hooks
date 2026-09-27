@@ -73,5 +73,6 @@ In a repository with no tests, it will ask every time you claim done after an ed
 - Edits made inside a subagent live in the subagent's transcript, not the main one.
 - A test run started in the background reports "running", not a result. It counts as run.
 - Claims are recognised in English.
+- A test run inside a command the grammar cannot parse is not seen. The feedback then says which command it could not read.
 
 Tests: `test/done-gate.test.mjs`.

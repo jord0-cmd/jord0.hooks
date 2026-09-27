@@ -12,6 +12,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileS
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
 
+import * as recoverable from "../lib/recoverable/index.mjs";
 import * as judges from "../lib/recoverable/judges.mjs";
 import { resolveWord } from "../lib/shell.mjs";
 import { decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
@@ -353,6 +354,47 @@ describe("judges: round 1b (the missing-lens seat)", () => {
   });
 });
 
+describe("the assembly, around a dispatcher that finds nothing", () => {
+  const nothing = async () => null;
+  const run = (command, { agentId = "", dispatch = nothing, cwd = tree } = {}) =>
+    recoverable.judge(
+      { tool_name: "Bash", tool_input: { command }, cwd, ...(agentId ? { agent_id: agentId } : {}) },
+      { signal: new AbortController().signal, dispatch },
+    );
+  // Valid bash (it ran, and deleted wip/), that the grammar cannot parse.
+  const unreadable = "cat <<EOF; rm -rf wip\nbody\nEOF";
+
+  it("judges where the call runs when part of the command could not be parsed", async () => {
+    const main = await run(unreadable);
+    assert.equal(main?.decision, "ask");
+    assert.match(main.reason, /^RECOVERABLE: a command this guard cannot fully parse would destroy/);
+    assert.equal((await run(unreadable, { agentId: "agent-1" }))?.decision, "deny");
+  });
+
+  it("stays silent when the unparsed command runs outside any repository", async () => {
+    const loose = join(tree, "..", "loose");
+    mkdirSync(loose);
+    assert.equal(await run(unreadable, { cwd: loose }), null);
+  });
+
+  it("stays silent when everything parsed and the dispatcher found nothing", async () => {
+    assert.equal(await run("ls -la"), null);
+  });
+
+  it("returns the dispatcher's own verdict first", async () => {
+    const verdict = { decision: "ask", reason: "RECOVERABLE: from the dispatcher" };
+    assert.deepEqual(await run(unreadable, { dispatch: async () => verdict }), verdict);
+  });
+
+  it("turns a git that cannot answer into ask, and deny inside a subagent", async () => {
+    const failing = async () => {
+      throw new judges.ProbeFailed("git status: timed out");
+    };
+    assert.match((await run("ls", { dispatch: failing }))?.reason ?? "", /could not ask git .* timed out/);
+    assert.equal((await run("ls", { dispatch: failing, agentId: "agent-1" }))?.decision, "deny");
+  });
+});
+
 describe("the hook: a malformed payload", () => {
   it("asks when the payload carries no command, never stays silent", async () => {
     const result = await runHook("recoverable", { tool_name: "Bash", tool_input: {}, cwd: tree }, { cwd: tree });
@@ -420,6 +462,7 @@ const LOUD = [
   "coproc ( rm -rf wip )",
   "echo hi > $(rm -rf wip)",
   "cat <<EOF\n$(rm -rf wip)\nEOF",
+  "cat <<EOF; rm -rf wip\nbody\nEOF", // valid bash the grammar cannot parse: judged where it runs
 ];
 
 const QUIET = [

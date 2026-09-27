@@ -40,7 +40,9 @@ A word the guard cannot read, such as `$(git diff --name-only)` or an unset vari
 
 ## Finding the command
 
-Commands are found by tree-sitter's bash grammar, not by splitting text on `;` and `&&`. A delete inside `( … )`, `if … then … fi`, a `for` loop, `$( … )`, `eval '…'`, `bash -c '…'` or a heredoc fed to `bash` is still a delete. A delete that is only mentioned (`grep -rn "rm -rf" .`, a heredoc fed to `cat`, a commit message) is not. `((rm -rf wip))` is bash arithmetic and runs nothing.
+Commands are found by tree-sitter's bash grammar, not by splitting text on `;` and `&&`. A delete inside `( … )`, `if … then … fi`, a `for` loop, `$( … )`, `eval '…'`, `bash -c '…'`, a heredoc fed to `bash`, `time { … }` or a redirection's `$( … )` is still a delete. A delete that is only mentioned (`grep -rn "rm -rf" .`, a heredoc fed to `cat`, a commit message) is not. `((rm -rf wip))` is bash arithmetic and runs nothing.
+
+Some valid bash will not parse. `cat <<EOF; rm -rf wip` is one. It deletes, and the grammar reads only the `cat`. When part of a command cannot be parsed, RECOVERABLE judges where the command runs. A command it cannot read is not a command that deletes nothing.
 
 ## Asking git safely
 

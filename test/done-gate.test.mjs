@@ -236,3 +236,17 @@ describe("round 1 of review: DONE-GATE", () => {
     assert.equal(isTestCommand(["npm", "run", "test-data-generator"]), false);
   });
 });
+
+describe("round 1b: DONE-GATE", () => {
+  it("says so when a command since the edit could not be parsed", async () => {
+    // Valid bash that runs pytest; the grammar cannot parse a heredoc opened before `;`.
+    const steps = [edit("/w/a.py"), bash("cat <<EOF; pytest -q\nbody\nEOF", { output: "3 passed" })];
+    const out = await verdict(stop(steps, "Done."));
+    assert.match(out.feedback, /no test this hook can recognise has run since \(it could not parse `cat <<EOF; pytest -q`\)/);
+  });
+
+  it("sees a test run behind bash's `time` reserved word", async () => {
+    const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
+    assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);
+  });
+});
