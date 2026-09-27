@@ -11,11 +11,12 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import * as recoverable from "../lib/recoverable/index.mjs";
 import * as judges from "../lib/recoverable/judges.mjs";
 import { resolveWord } from "../lib/shell.mjs";
-import { decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
+import { ROOT, decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
 import { gitIn, makeTree } from "./helpers/repo.mjs";
 
 let tree;
@@ -256,6 +257,28 @@ describe("judges: asking git without running the repository's programs", () => {
     } finally {
       process.env.PATH = saved;
     }
+  });
+
+  it("refuses to guess on a git older than 2.26, which cannot list a repository's filters", () => {
+    // The version is read once per process, so this runs in a fresh one, with a git that says 2.25.
+    const realGit = execFileSync("sh", ["-c", "command -v git"]).toString().trim();
+    const shimDir = join(tree, "..", "old");
+    mkdirSync(shimDir);
+    writeFileSync(join(shimDir, "git"), `#!/bin/sh\n[ "$1" = version ] && { echo "git version 2.25.0"; exit 0; }\nexec "${realGit}" "$@"\n`);
+    chmodSync(join(shimDir, "git"), 0o755);
+    const judgesUrl = pathToFileURL(join(ROOT, "lib", "recoverable", "judges.mjs")).href;
+    const shellUrl = pathToFileURL(join(ROOT, "lib", "shell.mjs")).href;
+    const script = `
+      import * as judges from ${JSON.stringify(judgesUrl)};
+      import { resolveWord } from ${JSON.stringify(shellUrl)};
+      const ctx = { base: process.cwd(), agentId: "", before: [], resolve: (w) => resolveWord(w, { cwd: process.cwd() }) };
+      try { await judges.rm(["rm", "-rf", "wip"], ctx); console.log("NO ERROR"); }
+      catch (err) { console.log(err instanceof judges.ProbeFailed ? "ProbeFailed: " + err.message : "OTHER: " + err.message); }`;
+    const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: tree,
+      env: { ...process.env, PATH: `${shimDir}:${process.env.PATH}` },
+    }).toString("utf8").trim();
+    assert.equal(out, "ProbeFailed: git 2.25 is older than 2.26 and cannot list this repository's filters");
   });
 
   it("keeps working when a blanked filter is marked required", async () => {
