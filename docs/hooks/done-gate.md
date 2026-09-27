@@ -65,7 +65,7 @@ And when the last run failed behind a pipe:
 - No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it. And no admission excuses a test run that failed.
 - `stop_hook_active` is true, which means Claude is already continuing because of a refusal. DONE-GATE refuses at most once per stop.
 - `JORD0_DONE_GATE=0` is set.
-- It cannot read the transcript. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.
+- It cannot read the transcript, or the payload carries no final message. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.
 
 ## When not to use it
 

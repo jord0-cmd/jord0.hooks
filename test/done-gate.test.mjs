@@ -120,6 +120,15 @@ describe("DONE-GATE says so when it cannot check", () => {
     const out = await verdict({ last_assistant_message: "Done.", transcript_path: "/no/such/file.jsonl" });
     assert.match(out.notice, /could not be read/);
   });
+
+  it("with no final message in the payload", async () => {
+    const out = await verdict({ transcript_path: transcript([edit("/w/a.py")]), stop_hook_active: false });
+    assert.match(out?.notice ?? "", /carried no final message/);
+  });
+
+  it("but lets an empty final message through: it claims nothing", async () => {
+    assert.equal(await verdict(stop([edit("/w/a.py")], "")), null);
+  });
 });
 
 describe("reading the claim", () => {
