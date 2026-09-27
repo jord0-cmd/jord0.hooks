@@ -318,6 +318,41 @@ describe("judges: round 1 of review", () => {
   });
 });
 
+describe("judges: round 1b (the missing-lens seat)", () => {
+  for (const argv of [
+    ["git", "checkout", "--", "*.py"],
+    ["git", "checkout", "HEAD", "--", "*.py"],
+    ["git", "restore", "-SW", "*.py"],
+    ["git", "rm", "-f", "*.py"],
+  ]) {
+    it(`judges the whole tree for a glob pathspec: ${argv.join(" ")}`, async () => {
+      assert.equal((await judges.git(argv, ctx()))?.decision, "ask");
+    });
+  }
+
+  for (const argv of [
+    ["find", "wip", "-print", "-delete"],
+    ["find", "wip", "-type", "f", "-print", "-delete"],
+    ["find", "wip", "-printf", "%p\\n", "-delete"],
+    ["find", "wip", "-ls", "-delete"],
+  ]) {
+    it(`dry-runs a find that also prints: ${argv.join(" ")}`, async () => {
+      assert.equal((await judges.find(argv, ctx()))?.decision, "ask");
+    });
+  }
+
+  it("dry-runs a printing feeder that formats its output", async () => {
+    const feed = { kind: "find", argv: ["find", "wip", "-printf", "%p\\n"] };
+    assert.equal((await judges.pipeFedRm(["rm", "-rf"], feed, ctx()))?.decision, "ask");
+  });
+
+  it("judges where it runs when a list file names something that does not resolve", async () => {
+    writeFileSync(join(tree, "quoted.txt"), '"wip"\n');
+    const v = await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "quoted.txt" }, ctx());
+    assert.equal(v?.decision, "ask");
+  });
+});
+
 describe("the hook: a malformed payload", () => {
   it("asks when the payload carries no command, never stays silent", async () => {
     const result = await runHook("recoverable", { tool_name: "Bash", tool_input: {}, cwd: tree }, { cwd: tree });
