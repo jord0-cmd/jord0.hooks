@@ -1,18 +1,18 @@
 // FLAG-PROBE: every acceptance criterion, against real scripts on disk.
 
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
 
 import { decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
+import { scratchDir } from "./helpers/scratch.mjs";
 import { bash, transcript } from "./helpers/transcript.mjs";
 
 let dir;
 
 before(() => {
-  dir = mkdtempSync(join(tmpdir(), "jord0-hooks-flag-probe-"));
+  dir = scratchDir("jord0-hooks-flag-probe-");
   const script = (name, body) => {
     writeFileSync(join(dir, name), body);
     chmodSync(join(dir, name), 0o755);

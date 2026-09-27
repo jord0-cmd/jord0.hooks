@@ -15,7 +15,7 @@
 // disk there, never passed on a command line, and the container is removed at the end.
 
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,7 @@ async function main() {
 
   // mkdtemp makes the directory 0700, and the container's user is not this one.
   const srv = mkdtempSync(join(tmpdir(), "jord0-hooks-e2e-"));
+  process.on("exit", () => rmSync(srv, { recursive: true, force: true }));
   chmodSync(srv, 0o755);
   step(`publishing the committed tree ${head} as a local git remote`);
   await must(sh("git", ["clone", "-q", "--bare", "--no-local", ROOT, join(srv, "jord0.hooks.git")]));

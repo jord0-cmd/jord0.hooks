@@ -6,9 +6,10 @@
 //   build/, node_modules/, *.pyc        ignored                (a rebuild gives them back)
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { scratchDir } from "./scratch.mjs";
 
 export function gitIn(dir, ...args) {
   return execFileSync("git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
@@ -18,7 +19,7 @@ export function gitIn(dir, ...args) {
 }
 
 export function makeTree() {
-  const root = mkdtempSync(join(tmpdir(), "jord0-hooks-tree-"));
+  const root = scratchDir("jord0-hooks-tree-");
   const t = join(root, "tree");
   const write = (rel, data) => {
     mkdirSync(join(t, rel, ".."), { recursive: true });

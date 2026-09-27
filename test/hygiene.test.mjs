@@ -3,8 +3,9 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, it } from "node:test";
 
 import { ROOT } from "./helpers/hook.mjs";
@@ -30,6 +31,16 @@ describe("nothing private leaks", () => {
         });
     }
     assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
+  });
+});
+
+describe("the suite cleans up after itself", () => {
+  it("removes a test's git work tree when its process exits", () => {
+    const helper = pathToFileURL(join(ROOT, "test", "helpers", "repo.mjs")).href;
+    const script = `import { makeTree } from ${JSON.stringify(helper)}; console.log(makeTree());`;
+    const tree = execFileSync(process.execPath, ["--input-type=module", "-e", script]).toString("utf8").trim();
+    assert.ok(tree.endsWith("tree"), tree);
+    assert.equal(existsSync(tree), false, `${tree} outlived the process that made it`);
   });
 });
 

@@ -1,9 +1,10 @@
 // Builds transcripts in the shape Claude Code writes them (one JSON object per line), so the
 // DONE-GATE tests can describe a session as a list of steps instead of hand-written JSONL.
 
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { scratchDir } from "./scratch.mjs";
 
 let counter = 0;
 
@@ -44,7 +45,7 @@ export function transcript(steps) {
       });
     }
   }
-  const dir = mkdtempSync(join(tmpdir(), "jord0-hooks-transcript-"));
+  const dir = scratchDir("jord0-hooks-transcript-");
   const path = join(dir, "session.jsonl");
   writeFileSync(path, `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`);
   return path;
