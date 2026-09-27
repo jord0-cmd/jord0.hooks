@@ -48,6 +48,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | `--git-dir`, `--work-tree` and `GIT_DIR=` are judged in the repository they name | the location passed to every git call | red, five tests |
 | a commit on a detached HEAD or a tag counts as history | every ref, not only branches | red |
 | the stash is not counted twice | `refs/stash` excluded from the commit count | red |
+| deleting a linked worktree names no lost commits | history tied to the git directory, not the top | red |
 
 One of them lied first.
 

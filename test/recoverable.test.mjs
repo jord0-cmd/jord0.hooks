@@ -377,6 +377,16 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
   });
 
+  it("names no lost history for a linked worktree, whose commits live in the main tree", async () => {
+    gitIn(tree, "worktree", "add", "-q", "../wt");
+    writeFileSync(join(tree, "..", "wt", "notes.md"), "mine");
+    const v = await judges.rm(words("rm -rf ../wt"), ctx());
+    assert.equal(v?.decision, "ask");
+    assert.doesNotMatch(v.reason, /on no remote/);
+    assert.match(v.reason, /notes\.md/);
+    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+  });
+
   describe("a git command that names its repository", () => {
     // The command runs from a clean directory outside the dirty tree.
     let away;
