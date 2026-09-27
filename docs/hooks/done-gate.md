@@ -13,6 +13,8 @@ A turn ended on "all green". Ninety-two tests had passed. They were a subset. Th
 
 The same claim turns up in three other shapes. A test ran before the last edit. A test ran and failed, but its output went through `tail`, which exits 0. Or nothing ran at all. The person reading "done" cannot tell any of these apart.
 
+DONE-GATE catches those three. Not the subset. It sees that a test ran after the edit and passed, never whether it was the right test. Which tests ran is in the runner's own result line, and that line is yours to read.
+
 ## What it checks
 
 When Claude is about to stop, DONE-GATE reads the final message and then what the session did, in order:
@@ -72,6 +74,7 @@ In a repository with no tests, it will ask every time you claim done after an ed
 - It reads Claude Code's session transcript, whose format is internal to Claude Code. If that format changes and nothing can be read, the hook says so and checks nothing.
 - Edits made inside a subagent live in the subagent's transcript, not the main one.
 - A test run started in the background reports "running", not a result. It counts as run.
+- A run counts whatever it covered. One test file, unrelated to the edit, passes the gate.
 - Claims are recognised in English.
 - A test run inside a command the grammar cannot parse is not seen. The feedback then says which command it could not read.
 
