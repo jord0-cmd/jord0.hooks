@@ -627,6 +627,20 @@ const LOUD = [
   "cat <<EOF; rm -rf wip\nbody\nEOF", // valid bash the grammar cannot parse: judged where it runs
   "cd .. && git --git-dir=tree/.git --work-tree=tree checkout -- .",
   "cd .. && GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", // the dispatcher hands the judge `prefix`
+  // Within the floor, found by a fresh-context review: a command reached through a pipe-to-shell,
+  // a here-string, xargs running git, a find -exec running a shell or git, a failed cd, and
+  // wrappers (flock, builtin, env -C, a deep chain).
+  "echo 'rm -rf wip' | bash",
+  "bash <<< 'rm -rf wip'",
+  "bash -ce 'rm -rf wip'",
+  "git diff --name-only | xargs git checkout --",
+  "find wip -exec sh -c 'rm -rf \"$0\"' {} ;",
+  "find . -name '*.py' -exec git checkout -- {} +",
+  "cd nope; rm -rf wip",
+  "flock lock rm -rf wip",
+  "builtin cd wip && rm -rf deep",
+  "env -C wip rm -rf deep",
+  "sudo env FOO=1 nice -n 19 ionice -c3 timeout 600 nohup stdbuf -oL rm -rf wip",
 ];
 
 const QUIET = [
@@ -652,6 +666,13 @@ const QUIET = [
   "git rm --cached src/mod.py",
   "echo done > wip/notes.md.bak",
   "cat <<'EOF'\n$(rm -rf wip)\nEOF",
+  // Harmless shapes the within-floor changes must not start asking about.
+  "echo hello | bash",
+  "echo 'ls -la' | bash",
+  "git diff --name-only | xargs echo",
+  "find . -name '*.log' -exec sh -c 'echo {}' ;",
+  "flock -w 5 lock ls",
+  "bash script.sh",
 ];
 
 // A broken hook fails closed and asks on EVERYTHING, which would pass the loud list for the

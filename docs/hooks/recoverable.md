@@ -105,6 +105,7 @@ Outside git it says nothing, so it does nothing for work that was never in a rep
 It raises the floor against a tidy-minded agent. It is not a sandbox against an adversary.
 
 - `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
+- It reads the program a command names. A name built at run time is not read: `R=rm; $R -rf wip`, `eval "$(echo rm -rf wip)"`, `$(which rm) -rf wip`. Reaching those is the adversary this hook is not built to stop.
 - Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
 - A delete is judged against the repository its targets sit in. A sweep rooted above your repositories (`rm -rf ~/projects`) sits in none of them, and is not seen.
 - On Windows there is no system `find` to dry-run with, so a `find` delete is judged against its whole root instead, the stricter answer. Windows is not claimed.

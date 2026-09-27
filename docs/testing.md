@@ -47,6 +47,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a git older than 2.26 is a probe failure, never a guess | the version floor | red |
 | `cat > app.py <<EOF`, `tee` and `git apply` are edits, `tee test-output` is not | shell writes, source extensions only | red, one mutation each |
 | `./gradlew --help` and Django's `manage.py --help` pass, a file called `manage.py` does not | the two wrapper calls | red, two tests |
+| within-floor shapes a review found (pipe-to-shell, here-string, `xargs git`, `find -exec sh -c`/`git`, a failed `cd`, `flock`/`builtin`/`env -C`) | the dispatcher's wrapper, shell, xargs and find-exec routing | in the loud list |
 | several files deleted on the main thread | the one-file exemption | red |
 | a magic pathspec judges the whole tree | pathspec magic | red |
 | deleting `.git` counts commits on no remote | the history check | red |
