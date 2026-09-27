@@ -202,7 +202,10 @@ describe("round 1 of review: spellings that used to walk past", () => {
 
   it("asks, and denies a subagent, when the program cannot be resolved", async () => {
     const command = 'for f in ./*.sh; do "$f" --help; done';
-    assert.equal((await decide(command)).decision, "ask");
+    // Its own reason, not the failure path's: a guard that crashed would ask and deny too.
+    const main = await decide(command);
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /cannot tell which program that is/);
     const payload = {
       tool_name: "Bash",
       tool_input: { command },
@@ -210,7 +213,9 @@ describe("round 1 of review: spellings that used to walk past", () => {
       agent_id: "agent-1",
       transcript_path: transcript([]),
     };
-    assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "deny");
+    const sub = (await runHook("flag-probe", payload, { cwd: dir })).answer;
+    assert.equal(decisionOf(sub), "deny");
+    assert.match(reasonOf(sub), /cannot tell which program that is/);
   });
 });
 
@@ -292,6 +297,7 @@ describe("round 1 of review: a malformed payload is not silence", () => {
   it("asks when the payload carries no command", async () => {
     const result = await runHook("flag-probe", { tool_name: "Bash", tool_input: {}, cwd: dir }, { cwd: dir });
     assert.equal(decisionOf(result.answer), "ask");
+    assert.match(reasonOf(result.answer), /no tool_input\.command string/);
   });
 
   it("stays out of a call to another tool", async () => {

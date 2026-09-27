@@ -673,9 +673,15 @@ describe("the hook: loud shapes ask the main thread and are denied to a subagent
 
   it("agrees on relative, cd-resolved and absolute spellings", async () => {
     const parent = join(tree, "..");
-    assert.equal((await hook("rm -rf wip")).decision, "ask");
-    assert.equal((await hook(`cd ${tree} && rm -rf wip`, { cwd: parent })).decision, "ask");
-    assert.equal((await hook(`rm -rf ${tree}/wip`, { cwd: parent })).decision, "ask");
+    for (const answer of [
+      await hook("rm -rf wip"),
+      await hook(`cd ${tree} && rm -rf wip`, { cwd: parent }),
+      await hook(`rm -rf ${tree}/wip`, { cwd: parent }),
+    ]) {
+      // A judge's reason, as for every loud shape: a hook that fails closed asks too.
+      assert.equal(answer.decision, "ask");
+      assert.match(answer.reason, FROM_A_JUDGE, answer.reason);
+    }
   });
 });
 
