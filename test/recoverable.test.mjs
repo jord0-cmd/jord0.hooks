@@ -347,6 +347,25 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.equal((await judges.pipeFedRm(["rm", "-rf"], feed, ctx()))?.decision, "ask");
   });
 
+  it("judges `git clean -d` without -f when the repository does not require -f", async () => {
+    assert.equal(await judges.git(words("git clean -d"), ctx()), null);
+    gitIn(tree, "config", "clean.requireForce", "false");
+    assert.equal((await judges.git(words("git clean -d"), ctx()))?.decision, "ask");
+    assert.equal((await judges.git(words("git clean -d"), ctx("agent-1")))?.decision, "deny");
+    assert.equal(await judges.git(words("git -c clean.requireForce=true clean -d"), ctx()), null);
+  });
+
+  it("judges `git clean -d` when the command itself lifts the -f requirement", async () => {
+    for (const cmd of [
+      "git -c clean.requireForce=false clean -d",
+      "git -c clean.requireforce=off clean",
+      "git --config-env=clean.requireForce=V clean -d",
+      "git --config-env clean.requireForce=V clean -d",
+    ]) {
+      assert.equal((await judges.git(words(cmd), ctx()))?.decision, "ask", cmd);
+    }
+  });
+
   it("judges where it runs when a list file names something that does not resolve", async () => {
     writeFileSync(join(tree, "quoted.txt"), '"wip"\n');
     const v = await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "quoted.txt" }, ctx());

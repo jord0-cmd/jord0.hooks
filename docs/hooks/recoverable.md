@@ -30,7 +30,7 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 | `git checkout HEAD -- f`, `git restore -SW f` | every uncommitted edit, staged or not |
 | `git checkout -f`, `git switch -f`, `git switch --discard-changes`, `git reset --hard` | every uncommitted edit in the tree |
 | `git checkout-index -f` | unstaged edits to the files it rewrites |
-| `git clean -f` | untracked files (not `-n`, not `-X` alone) |
+| `git clean -f`, or `git clean` where `clean.requireForce` is false | untracked files (not `-n`, not `-X` alone) |
 | `git rm -f` | uncommitted edits to the files it removes (plain `git rm` already refuses) |
 | `git stash drop`, `git stash clear` | the stash, when it holds anything |
 
