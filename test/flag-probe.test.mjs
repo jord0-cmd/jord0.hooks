@@ -35,6 +35,13 @@ before(() => {
   // A handler that has been commented out is not a handler.
   script("commented.sh", '#!/bin/sh\n# case "$1" in\n#   -h|--help) usage ;;\n# esac\necho ran\n');
   script("commented.py", "# import argparse\nprint('ran')\n");
+  // Round 1b: a handler in a trailing comment or a usage string is not a handler.
+  script("trailing.sh", '#!/bin/bash\nset -euo pipefail\ndeploy_everything "$@"   # case "$1" in -h|--help) usage;; esac\n');
+  script("usage-string.sh", '#!/bin/sh\necho "Try: make help (or make --help)"\necho ran\n');
+  script("trailing.mjs", '#!/usr/bin/env node\nconsole.log("ran"); // if (arg === "--help") later\n');
+  script("oneliner.sh", '#!/bin/sh\ncase "$1" in -h|--help) echo usage; exit 0;; esac\necho ran\n');
+  script("hash-in-string.sh", '#!/bin/sh\necho "# not a comment"\ncase "$1" in\n  --help | -h ) echo usage ;;\nesac\n');
+  script("length.sh", '#!/bin/sh\nif [ ${#1} -gt 0 ] && [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n');
 });
 
 /** The decision FLAG-PROBE makes for `command` run in the scratch dir after `history`. */
@@ -196,6 +203,19 @@ describe("round 1 of review: spellings that used to walk past", () => {
     };
     assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "deny");
   });
+});
+
+describe("round 1b: only code that handles the flag counts", () => {
+  for (const command of ["./trailing.sh --help", "./usage-string.sh --help", "node trailing.mjs --help"]) {
+    it(`denies ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "deny");
+    });
+  }
+  for (const command of ["./oneliner.sh --help", "./hash-in-string.sh -h", "./length.sh --help"]) {
+    it(`stays silent for ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "silent");
+    });
+  }
 });
 
 describe("round 1b: a command the grammar cannot parse", () => {

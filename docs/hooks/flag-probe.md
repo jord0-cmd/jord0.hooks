@@ -19,7 +19,7 @@ For every Bash call, FLAG-PROBE finds each script invoked with a standalone `-h`
 
 The call goes through when either is true:
 
-- **The script's code handles the flag.** A `-h|--help)` case arm, a test like `[ "$1" = "--help" ]`, `getopts` with `h`, a `"--help" in sys.argv`, or the import line of a parser that answers help itself: argparse, click, typer, docopt, fire, commander, yargs, OptionParser and others. Comments are removed before looking. A comment saying the script does not support `--help` is not support for it, and neither is `add_help=False`.
+- **The script's code handles the flag.** A `-h|--help)` case arm, a test like `[ "$1" = "--help" ]`, `getopts` with `h`, a `"--help" in sys.argv`, or the import line of a parser that answers help itself: argparse, click, typer, docopt, fire, commander, yargs, OptionParser and others. Comments are removed before looking, a trailing one included. A comment saying the script does not support `--help` is not support for it, and neither is `add_help=False`, or a usage line that mentions the flag.
 - **The script was read this session.** A Read of the file, or `cat`, `head`, `sed -n`, `rg` and the like with the file as an operand, earlier in the session or earlier in the same command. A search pattern is not a read: `grep deploy.sh notes.txt` read `notes.txt`. A read counts for the file it named in the directory it ran in, and a local read never vouches for a script on another machine.
 
 A program it cannot name, such as `"$f" --help` in a loop over files, is asked about instead of guessed at. Inside a subagent it is denied.
