@@ -387,6 +387,20 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
   });
 
+  it("judges `git worktree remove --force`, which deletes a dirty worktree whole", async () => {
+    gitIn(tree, "worktree", "add", "-q", "../wt");
+    assert.equal(await judges.git(words("git worktree remove --force ../wt"), ctx()), null); // clean
+    writeFileSync(join(tree, "..", "wt", "notes.md"), "mine");
+    for (const cmd of ["git worktree remove --force ../wt", "git worktree remove -f ../wt"]) {
+      const v = await judges.git(words(cmd), ctx());
+      assert.equal(v?.decision, "ask", cmd);
+      assert.match(v.reason, /notes\.md/);
+      assert.doesNotMatch(v.reason, /on no remote/);
+    }
+    assert.equal((await judges.git(words("git worktree remove -f ../wt"), ctx("agent-1")))?.decision, "deny");
+    assert.equal(await judges.git(words("git worktree remove ../wt"), ctx()), null); // git itself refuses
+  });
+
   describe("a git command that names its repository", () => {
     // The command runs from a clean directory outside the dirty tree.
     let away;

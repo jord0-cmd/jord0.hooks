@@ -33,6 +33,7 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 | `git clean -f`, or `git clean` where `clean.requireForce` is false | untracked files (not `-n`, not `-X` alone) |
 | `git rm -f` | uncommitted edits to the files it removes (plain `git rm` already refuses) |
 | `git stash drop`, `git stash clear` | the stash, when it holds anything |
+| `git worktree remove --force` | untracked files and uncommitted edits in that worktree (its commits live in the main tree) |
 
 Deleting one file on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. Several files, anything recursive, and every delete a subagent makes are judged.
 
