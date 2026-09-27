@@ -45,6 +45,11 @@ before(() => {
   script("legacy", "echo no shebang here\necho ran\n");
   writeFileSync(join(dir, "notexec"), "echo ran\n"); // not executable: bash refuses to run it
   script("compiled", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0]));
+  // Round 1b: wrappers that hand the flag to a CLI that answers it, known by the call they make.
+  mkdirSync(join(dir, "django"));
+  script("django/manage.py", "import sys\n\ndef main():\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(sys.argv)\n");
+  script("gradlew", '#!/bin/sh\nset -- -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"\nexec "$JAVACMD" "$@"\n');
+  script("manage.py", "print('a manage.py that is not Django, and runs')\n");
   script("length.sh", '#!/bin/sh\nif [ ${#1} -gt 0 ] && [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n');
 });
 
@@ -220,6 +225,17 @@ describe("round 1b: only code that handles the flag counts", () => {
       assert.equal((await decide(command)).decision, "silent");
     });
   }
+});
+
+describe("round 1b: a wrapper that hands the flag on", () => {
+  for (const command of ["./gradlew --help", "cd django && python3 manage.py --help"]) {
+    it(`stays silent for ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "silent");
+    });
+  }
+  it("does not trust a file for its name", async () => {
+    assert.equal((await decide("python3 manage.py --help")).decision, "deny");
+  });
 });
 
 describe("round 1b: a script with no #!", () => {
