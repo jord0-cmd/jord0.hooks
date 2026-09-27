@@ -124,6 +124,8 @@ describe("resolving words", () => {
     assert.equal(resolveWord("$(ls)", context).unknown, true);
     assert.equal(resolveWord("{wip,build}", context).unknown, true);
     assert.equal(resolveWord("`date`", context).unknown, true);
+    assert.equal(resolveWord("wip{1..3}", context).unknown, true);
+    assert.equal(resolveWord("~deploy/app", context).unknown, true);
   });
 });
 

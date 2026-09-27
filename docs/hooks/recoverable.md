@@ -21,18 +21,22 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 
 | Command | What would be lost |
 |---------|--------------------|
-| `rm -r`, `unlink`, `shred` | untracked files and uncommitted edits under the targets |
+| `rm -r`, or `rm` / `unlink` / `shred` of several files | untracked files and uncommitted edits under the targets |
+| `rm -rf .git`, or the whole work tree | the same, and every commit on no remote, and the stash |
 | `find … -delete`, `find … -exec rm … {}` | the same, for exactly what the find matches (dry-run first) |
 | `… \| xargs rm` | the same, for what feeds it: a printing `find`, a list file, or where it runs |
 | `git checkout -- f`, `git restore f` | unstaged edits (a staged edit survives a restore from the index) |
+| any git discard with `:!pattern` or `--pathspec-from-file` | judged against the whole tree, since the set is open-ended |
 | `git checkout HEAD -- f`, `git restore -SW f` | every uncommitted edit, staged or not |
 | `git checkout -f`, `git switch -f`, `git switch --discard-changes`, `git reset --hard` | every uncommitted edit in the tree |
 | `git checkout-index -f` | unstaged edits to the files it rewrites |
-| `git clean -f` | untracked files (not `-n`, not `-X`) |
+| `git clean -f` | untracked files (not `-n`, not `-X` alone) |
 | `git rm -f` | uncommitted edits to the files it removes (plain `git rm` already refuses) |
 | `git stash drop`, `git stash clear` | the stash, when it holds anything |
 
-A single-file `rm` on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. Inside a subagent every delete is judged.
+Deleting one file on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. Several files, anything recursive, and every delete a subagent makes are judged.
+
+A word the guard cannot read, such as `$(git diff --name-only)` or an unset variable, is judged by where the command runs. An unreadable word is not a word that names nothing.
 
 ## Finding the command
 
@@ -46,6 +50,10 @@ A security hook that runs `git status` runs it inside whatever repository the co
 - a `clean` filter, chosen by `.gitattributes` (which is committed, so it arrives with a clone), which git pipes a file through whenever it has to hash it.
 
 So every git call RECOVERABLE makes pins `core.fsmonitor` off, blanks every filter driver the repository's own config defines, and pins signature checks off. Reading config runs nothing, so the drivers are listed first. Drivers from your global config, git-lfs for one, are yours and keep working.
+
+The pins ride on git's command line as `-c key=value`. The tidier `GIT_CONFIG_COUNT` environment variables arrived in git 2.31, and git 2.30 was driven ignoring them and running both programs. The command-line form held on 2.30, 2.34 and 2.39.
+
+Only git's own "not a git repository" means there is nothing to protect. A broken config, a repository owned by someone else, or a format this git cannot read is a probe failure.
 
 The dry run of a `find` uses the system `find` by absolute path. A file called `find` in the working directory is never executed.
 
@@ -70,14 +78,14 @@ Inside a subagent:
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "RECOVERABLE: `git checkout` would destroy uncommitted work that is not yours: src/mod.py. Git cannot give it back. Other untracked and uncommitted work in this repository belongs to the main session: do not delete, revert, stash or clean anything you did not create. Leave it as it is and report what you found."
+    "permissionDecisionReason": "RECOVERABLE: `git checkout` would destroy work that is not yours: src/mod.py (1 path, untracked or edited and uncommitted). Git cannot give it back. Other untracked and uncommitted work in this repository belongs to the main session: do not delete, revert, stash or clean anything you did not create. Leave it as it is and report what you found."
   }
 }
 ```
 
 The subagent's reason says whose the work is, because a scope note is what made the incident's agent read everything else as clutter.
 
-When git cannot answer inside a repository (an error, a timeout, a git older than 2.26), the main thread gets `ask` and a subagent gets `deny`, with the reason. Never an allow.
+When git cannot answer inside a repository (an error, a timeout, a git older than 2.26), the main thread gets `ask` and a subagent gets `deny`, with the reason. Never an allow, and never silence.
 
 ## When not to use it
 
@@ -89,6 +97,8 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 
 - `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
 - Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
-- A `find` is judged against the repository of its root. A sweep rooted above several repositories is judged at its root.
+- A delete is judged against the repository its targets sit in. A sweep rooted above your repositories (`rm -rf ~/projects`) sits in none of them, and is not seen.
+- Ignored files are treated as rebuildable. A `.env` or a `.venv` is ignored and is not always rebuildable. Keep secrets somewhere a delete of the project cannot reach.
+- A very large work tree can make `git status` slower than the hook's eight-second budget. Then it asks, or denies a subagent.
 
 Tests: `test/recoverable.test.mjs`.

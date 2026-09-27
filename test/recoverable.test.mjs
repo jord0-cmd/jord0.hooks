@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
 
@@ -40,7 +40,7 @@ describe("judges: what a delete would lose", () => {
   it("denies a subagent and says whose work it is", async () => {
     const v = await judges.rm(words("rm -rf wip"), ctx("agent-1"));
     assert.equal(v.decision, "deny");
-    assert.match(v.reason, /not yours/);
+    assert.match(v.reason, /work that is not yours/);
     assert.match(v.reason, /belongs to the main session/);
   });
 
@@ -256,6 +256,65 @@ describe("judges: asking git without running the repository's programs", () => {
   it("raises ProbeFailed, never allows, when git cannot answer inside a repository", async () => {
     writeFileSync(join(tree, ".git", "index"), "this is not an index");
     await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
+  });
+});
+
+describe("judges: round 1 of review", () => {
+  it("asks through a symlinked working directory", async () => {
+    const link = join(tree, "..", "link");
+    symlinkSync(tree, link);
+    const through = { ...ctx(), base: link, resolve: (w) => resolveWord(w, { cwd: link }) };
+    assert.equal((await judges.git(words("git checkout -- ."), through))?.decision, "ask");
+  });
+
+  it("judges where it runs when a git word cannot be read", async () => {
+    const v1 = await judges.git(["git", "checkout", "--", "$(git diff --name-only)"], ctx());
+    const v2 = await judges.git(["git", "-C", "$UNSET_ANYWHERE_X", "reset", "--hard"], ctx());
+    assert.equal(v1?.decision, "ask");
+    assert.equal(v2?.decision, "ask");
+    assert.match(v1.reason, /a word this guard cannot read/);
+  });
+
+  it("judges a delete of several files on the main thread", async () => {
+    writeFileSync(join(tree, "a.md"), "a");
+    writeFileSync(join(tree, "b.md"), "b");
+    assert.equal((await judges.rm(words("rm -f a.md b.md"), ctx()))?.decision, "ask");
+  });
+
+  it("judges the whole tree for a magic pathspec or a pathspec file", async () => {
+    assert.equal((await judges.git(["git", "checkout", "--", ":!*.tmp"], ctx()))?.decision, "ask");
+    assert.equal((await judges.git(words("git restore --pathspec-from-file=list.txt"), ctx()))?.decision, "ask");
+  });
+
+  it("counts commits on no remote and the stash when .git or the whole tree goes", async () => {
+    gitIn(tree, "commit", "--allow-empty", "-qm", "only here");
+    const git = await judges.rm(words("rm -rf .git"), ctx("agent-1"));
+    assert.equal(git?.decision, "deny");
+    assert.match(git.reason, /2 commits on no remote/);
+    gitIn(tree, "stash", "push", "-q", "--", "src/mod.py");
+    const whole = await judges.rm(["rm", "-rf", tree], ctx());
+    assert.match(whole?.reason ?? "", /give back: 2 commits on no remote, the stash, and list\.txt, /);
+  });
+
+  it("treats -x beside -X as removing everything untracked", async () => {
+    assert.equal((await judges.git(words("git clean -fXx"), ctx()))?.decision, "ask");
+    assert.equal(await judges.git(words("git clean -fX"), ctx()), null);
+  });
+
+  it("counts a conflicted merge's paths as work in progress", async () => {
+    gitIn(tree, "stash", "push", "-q", "--", "src/mod.py");
+    gitIn(tree, "checkout", "-qb", "other");
+    writeFileSync(join(tree, "src", "mod.py"), "x = 3\n");
+    gitIn(tree, "commit", "-qam", "other side");
+    gitIn(tree, "checkout", "-q", "main");
+    writeFileSync(join(tree, "src", "mod.py"), "x = 4\n");
+    gitIn(tree, "commit", "-qam", "this side");
+    try {
+      gitIn(tree, "merge", "-q", "other");
+    } catch {
+      // the conflict is the point
+    }
+    assert.equal((await judges.git(words("git checkout -- src/mod.py"), ctx()))?.decision, "ask");
   });
 });
 

@@ -21,11 +21,13 @@ When Claude is about to stop, DONE-GATE reads the final message and then what th
 2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. Markdown, text, images and CSV do not count.
 3. After the last such edit, did a test command run, and did it pass?
 
-It knows the test runners people use: pytest, `python -m pytest`, tox, nox, jest, vitest, mocha, `node --test`, `deno test`, `cargo test`, `cargo nextest`, `go test`, `mvn test`, `gradle test`, `dotnet test`, rspec, `mix test`, `swift test`, ctest, phpunit, bats, plus `npm test`, `npm run test:*`, `make test` and `make check`. It sees through `timeout`, `env`, `uv run`, `poetry run`, `npx` and `bundle exec`. Anything else can be named in `JORD0_DONE_GATE_COMMANDS`.
+It knows the test runners people use: pytest, `python -m pytest`, `python manage.py test`, tox, nox, jest, vitest, mocha, `node --test`, `deno test`, `cargo test` (toolchain too), `cargo nextest`, `go test`, `mvn clean test`, `gradle test`, `dotnet test`, rspec, `mix test`, `swift test`, ctest, phpunit, bats, plus `npm test`, `npm run test:*`, `pnpm --filter x test`, `make test` and `make -j 4 check`. It sees through `timeout`, `env`, `nice`, `uv run`, `poetry run`, `npx`, `bundle exec` and `docker compose run`. Anything else can be named in `JORD0_DONE_GATE_COMMANDS`.
 
-## The pipe that hides a failure
+## The command that hides a failure
 
-`pytest | tail -3` exits with `tail`'s status, which is 0 however many tests failed. When a test run is piped and `pipefail` is not set, DONE-GATE reads the output for the summary lines the runners print: "3 failed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". Otherwise it trusts the exit status.
+A Bash call exits with its last command's status. `pytest | tail -3` exits with `tail`'s, and `pytest; echo done` and `pytest || true` exit 0 however many tests failed.
+
+So when a test run is piped onward without `pipefail`, or followed by anything, DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status.
 
 ## What it returns
 
@@ -46,7 +48,7 @@ And when the last run failed behind a pipe:
 {
   "hookSpecificOutput": {
     "hookEventName": "Stop",
-    "additionalContext": "DONE-GATE: your final message says “All tests pass.”, but the last test run after your edits failed: `pytest -q | tail -3` (its output says “1 failed”, and the pipe hid the exit status). Fix it and run it again, or say plainly that the work is not done."
+    "additionalContext": "DONE-GATE: your final message says “All tests pass.”, but the last test run after your edits failed: `pytest -q | tail -3` (its output says “41 passed, 1 failed in 2.10s”, and the command hid the exit status). Fix it and run it again, or say plainly that the work is not done."
   }
 }
 ```
@@ -56,7 +58,7 @@ And when the last run failed behind a pipe:
 ## When it lets the stop through
 
 - A test ran after the last edit and passed.
-- The final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice.
+- No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it. And no admission excuses a test run that failed.
 - `stop_hook_active` is true, which means Claude is already continuing because of a refusal. DONE-GATE refuses at most once per stop.
 - `JORD0_DONE_GATE=0` is set.
 - It cannot read the transcript. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.

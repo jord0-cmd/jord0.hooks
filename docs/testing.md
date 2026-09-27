@@ -1,6 +1,6 @@
 # How this is tested
 
-Three layers.
+Three layers, and a review.
 
 Each one catches what the one before it cannot.
 
@@ -26,6 +26,19 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a read script may be probed | the read history | red, four tests |
 | a trailing heredoc goes to the last pipeline stage | the last-stage rule | red |
 | every leaked name is reported, not only the first | (two planted leaks) | both reported |
+| git's pins reach it on git 2.30 | pins moved back off the command line | red |
+| a broken repository config is a failure, not silence | any git error read as "not a repository" | red |
+| a required filter does not kill `git status` | `required=false` beside the blank | red |
+| a commented-out `--help` handler does not count | comment stripping | red |
+| a grep pattern is not a read | per-tool operand parsing | red |
+| a local read does not vouch for a remote script | matching by path and host | red |
+| `Now all tests pass.` is a claim | whole-word negation | red, three tests |
+| `pytest; echo done` hides the exit status | "not the last command" | red, two tests |
+| an admission never excuses a failed run | the failed-run check | red |
+| several files deleted on the main thread | the one-file exemption | red |
+| a magic pathspec judges the whole tree | pathspec magic | red |
+| deleting `.git` counts commits on no remote | the history check | red |
+| a symlinked working directory still asks | resolving the real directory | red |
 
 One of them lied first.
 
@@ -34,6 +47,10 @@ The clean-filter test passed with the filter blanking removed. Its fixture chang
 ## The loud list and the quiet list
 
 A guard that fails closed asks about everything. That would pass any test that only checks it asks about dangerous commands. So every loud case must be refused by a judge, with a reason that says what would be lost, and there is a quiet list beside it: `rm -rf build`, `git status`, `grep -rn "rm -rf" .`, a commit message that mentions `find wip -delete`, `((rm -rf wip))`. No broken guard can stay silent on those.
+
+## A review before release
+
+Before anything was published, six Claude models read the code, each hunting a different class of flaw. One was told to break the consensus. A non-Claude model read it too, because Claude models share blind spots. A seventh Claude weighed their findings against the code and ran the disputed ones. Every finding was reproduced before it was fixed. Each fix got a test that fails without it. No exceptions.
 
 ## A vanilla Claude Code
 

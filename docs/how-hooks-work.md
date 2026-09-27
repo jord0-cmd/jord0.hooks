@@ -88,7 +88,9 @@ There is no approval prompt, and the hooks fire in every session where the plugi
 
 **Driven.** A plain `git status` executed a repository's `core.fsmonitor` program. It also piped a file through a `clean` filter chosen by `.gitattributes`, the moment it had to hash that file. A same-size edit forces the hash.
 
-Any hook that runs git inside a repository it did not choose inherits both. RECOVERABLE pins `core.fsmonitor` off and blanks the filter drivers the repository's own config defines, through `GIT_CONFIG_COUNT`, which outranks every config file.
+Any hook that runs git inside a repository it did not choose inherits both. RECOVERABLE pins `core.fsmonitor` off and blanks the filter drivers the repository's own config defines, as `-c key=value` on git's command line.
+
+**Driven** on git 2.30.2: the `GIT_CONFIG_COUNT` environment variables, which arrived in 2.31, were ignored, and both programs ran. The command-line form held on 2.30, 2.34 and 2.39.
 
 ## The transcript is not a contract
 
