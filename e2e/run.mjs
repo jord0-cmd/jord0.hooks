@@ -15,7 +15,7 @@
 // disk there, never passed on a command line, and the container is removed at the end.
 
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +49,9 @@ async function main() {
   step(`building the vanilla image (Claude Code ${version})`);
   await must(sh("docker", ["build", "-q", "-t", IMAGE, "--build-arg", `CLAUDE_CODE_VERSION=${version}`, HERE]));
 
+  // mkdtemp makes the directory 0700, and the container's user is not this one.
   const srv = mkdtempSync(join(tmpdir(), "jord0-hooks-e2e-"));
+  chmodSync(srv, 0o755);
   step(`publishing the committed tree ${head} as a local git remote`);
   await must(sh("git", ["clone", "-q", "--bare", "--no-local", ROOT, join(srv, "jord0.hooks.git")]));
   mkdirSync(join(srv, "market", ".claude-plugin"), { recursive: true });
@@ -58,7 +60,8 @@ async function main() {
     JSON.stringify({
       name: "jord0-e2e",
       owner: { name: "e2e" },
-      plugins: [{ name: "jord0-hooks", source: { source: "url", url: "file:///srv/jord0.hooks.git" } }],
+      metadata: { description: "The jord0.hooks end-to-end run: one plugin, served from a local git remote." },
+      plugins: [{ name: "jord0-hooks", source: { source: "url", url: "file:///home/tester/srv/jord0.hooks.git" } }],
     }),
   );
 
@@ -74,7 +77,11 @@ async function main() {
   const report = { head, version, model: MODEL, started: new Date().toISOString(), install: {}, scenarios: [] };
   try {
     step("installing the plugin with Claude Code's own CLI");
-    const added = await exec("claude plugin marketplace add /srv/market 2>&1");
+    // git refuses to clone a repository another user owns, so the tester takes its own copy
+    // of the mount instead of being told to trust someone else's directory.
+    await must(exec("cp -r /srv ~/srv"));
+    const added = await exec("claude plugin marketplace add ~/srv/market 2>&1");
+    if (added.code !== 0) throw new Error(`marketplace add failed:\n${added.stdout}${added.stderr}`);
     const installed = await exec("claude plugin install jord0-hooks@jord0-e2e 2>&1");
     const deps = await exec("find ~/.claude/plugins/cache -maxdepth 6 -type d -name web-tree-sitter 2>/dev/null");
     const claude = await exec("claude --version");
@@ -189,7 +196,9 @@ function ensure(dir) {
 
 function readToken() {
   try {
-    return readFileSync(TOKEN_FILE, "utf8").trim();
+    const token = readFileSync(TOKEN_FILE, "utf8").trim();
+    if (token) return token;
+    throw new Error("empty");
   } catch {
     console.error(
       `No token. Run \`claude setup-token\` in your own terminal and save it:\n` +

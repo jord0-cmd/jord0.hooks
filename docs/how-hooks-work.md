@@ -34,6 +34,16 @@ That last one is the trap.
 
 `allow` does not mean "no objection". A guard that answers `allow` to everything it has no opinion on has just approved every command it inspects. The right answer for "no objection" is to print nothing and exit 0. Your own permission settings then decide, as if the hook were not there. Source: [PreToolUse decision control](https://code.claude.com/docs/en/hooks#pretooluse-decision-control).
 
+## What ask and deny look like to Claude
+
+**Driven** in a stock Claude Code 2.1.283 container, through `claude -p`:
+
+- A hook's `ask` in headless mode is a refusal. The tool does not run, and Claude receives the ask reason as the tool's error result.
+- The same holds under `--dangerously-skip-permissions`. Bypass mode does not wave a hook's `ask` through.
+- A `deny` reaches Claude as `PreToolUse:Bash hook error:` followed by your reason. Claude quoted it back and ran nothing else.
+
+What an interactive session in bypass mode does with a hook's `ask` was not driven here, so this page does not claim it.
+
 ## A crash is an allow
 
 Exit 2 blocks. Any other non-zero exit is a non-blocking error: Claude Code shows a hook-error notice and runs the tool. Source: [exit codes](https://code.claude.com/docs/en/hooks#exit-code-2-behavior-per-event).

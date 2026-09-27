@@ -30,6 +30,12 @@ That is how Claude Code plugins work. It is also why this page exists.
 | silence DONE-GATE for one shell | `export JORD0_DONE_GATE=0` before starting Claude Code |
 | teach DONE-GATE your own test command | `export JORD0_DONE_GATE_COMMANDS="make ci,./scripts/verify.sh"` |
 
+## When an install is damaged
+
+A missing file or a missing package makes RECOVERABLE and FLAG-PROBE refuse every Bash call. That is the fail policy doing its job, and it is loud on purpose.
+
+The reason names what is missing. Reinstall the plugin, or disable it, and Bash works again.
+
 ## Without the marketplace
 
 Clone the repository and run `npm ci --ignore-scripts` in it. Then start Claude Code with `claude --plugin-dir /path/to/jord0.hooks`.
