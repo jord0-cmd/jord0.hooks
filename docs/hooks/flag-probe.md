@@ -24,7 +24,7 @@ The call goes through when either is true:
 
 A program it cannot name, such as `"$f" --help` in a loop over files, is asked about instead of guessed at. Inside a subagent it is denied.
 
-A bare name is found the way its runner finds it. `deploy.sh --help` is looked up on PATH. `bash deploy.sh --help` looks in the working directory first. A compiled program is not a script, so `/usr/bin/git --help` and `python3 -m pip --help` are never touched.
+A bare name is found the way its runner finds it. `deploy.sh --help` is looked up on PATH. `bash deploy.sh --help` looks in the working directory first. A compiled program is not a script, so `/usr/bin/git --help` and `python3 -m pip --help` are never touched. A file with no `#!` still is one. Bash runs an executable text file as a shell script, and `bash legacy` runs `legacy` whatever it is called.
 
 ## What it returns
 

@@ -41,6 +41,10 @@ before(() => {
   script("trailing.mjs", '#!/usr/bin/env node\nconsole.log("ran"); // if (arg === "--help") later\n');
   script("oneliner.sh", '#!/bin/sh\ncase "$1" in -h|--help) echo usage; exit 0;; esac\necho ran\n');
   script("hash-in-string.sh", '#!/bin/sh\necho "# not a comment"\ncase "$1" in\n  --help | -h ) echo usage ;;\nesac\n');
+  // Round 1b: bash runs an executable text file with no `#!` as a shell script.
+  script("legacy", "echo no shebang here\necho ran\n");
+  writeFileSync(join(dir, "notexec"), "echo ran\n"); // not executable: bash refuses to run it
+  script("compiled", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0]));
   script("length.sh", '#!/bin/sh\nif [ ${#1} -gt 0 ] && [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n');
 });
 
@@ -212,6 +216,20 @@ describe("round 1b: only code that handles the flag counts", () => {
     });
   }
   for (const command of ["./oneliner.sh --help", "./hash-in-string.sh -h", "./length.sh --help"]) {
+    it(`stays silent for ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "silent");
+    });
+  }
+});
+
+describe("round 1b: a script with no #!", () => {
+  // `bash notexec` runs it though it has no #! and no exec bit: the interpreter opens it.
+  for (const command of ["./legacy --help", "bash legacy --help", "sh ./legacy -h", "bash notexec --help"]) {
+    it(`denies ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "deny");
+    });
+  }
+  for (const command of ["./notexec --help", "./compiled --help"]) {
     it(`stays silent for ${command}`, async () => {
       assert.equal((await decide(command)).decision, "silent");
     });
