@@ -54,4 +54,6 @@ Over four times faster.
 
 A trivial command like `ls -la` hides the difference. It touches so little of the grammar that both come in near 45 ms, and the first benchmark said the flag did nothing.
 
+The flag is V8's. Not Node's. A Node that dropped it would refuse to start: `node: bad option`, exit 9. Claude Code reads a hook that exits 9 as an error and runs the command anyway. `npm test` starts Node with every flag in `hooks.json`, on each supported version. To check your own, run `node --liftoff-only -e 0`. Exit 0 and no output means it works.
+
 DONE-GATE runs once per stop and reads the tail of the session transcript.

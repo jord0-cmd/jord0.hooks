@@ -2,7 +2,7 @@
 // wiring, every source file says what it is, and every commit carries the right author.
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -30,6 +30,20 @@ describe("nothing private leaks", () => {
         });
     }
     assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
+  });
+});
+
+describe("the wiring starts on this Node", () => {
+  // `--liftoff-only` is a V8 flag, not a Node API. A Node that dropped it would refuse to
+  // start (exit 9, "bad option"), and Claude Code runs the tool when a hook exits like that.
+  // The quiet-list tests would pass on that silence, so this asks Node directly.
+  it("node accepts every flag hooks.json gives it", () => {
+    const hooks = Object.values(JSON.parse(text("hooks/hooks.json")).hooks).flatMap((groups) => groups.flatMap((g) => g.hooks));
+    for (const hook of hooks) {
+      const flags = hook.args.slice(0, -1);
+      const started = spawnSync(hook.command, [...flags, "-e", "0"], { encoding: "utf8" });
+      assert.equal(started.status, 0, `${hook.command} ${flags.join(" ")}: ${started.stderr.trim()}`);
+    }
   });
 });
 

@@ -50,6 +50,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | the stash is not counted twice | `refs/stash` excluded from the commit count | red |
 | deleting a linked worktree names no lost commits | history tied to the git directory, not the top | red |
 | `git worktree remove --force` on a dirty worktree | `worktree` among the discarding subcommands | red |
+| Node starts with every flag in `hooks.json` | (a flag Node rejects, planted) | red |
 
 One of them lied first.
 
