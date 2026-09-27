@@ -239,6 +239,25 @@ describe("judges: asking git without running the repository's programs", () => {
     }
   });
 
+  it("names git's own subcommand when a call runs out of time", async () => {
+    const realGit = execFileSync("sh", ["-c", "command -v git"]).toString().trim();
+    const shimDir = join(tree, "..", "slow");
+    mkdirSync(shimDir);
+    writeFileSync(join(shimDir, "git"), `#!/bin/sh\ncase " $* " in *" status "*) sleep 3 ;; esac\nexec "${realGit}" "$@"\n`);
+    chmodSync(join(shimDir, "git"), 0o755);
+    const saved = process.env.PATH;
+    process.env.PATH = `${shimDir}:${saved}`;
+    try {
+      await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), (err) => {
+        assert.ok(err instanceof judges.ProbeFailed);
+        assert.equal(err.message, "git status: timed out after 2000 ms");
+        return true;
+      });
+    } finally {
+      process.env.PATH = saved;
+    }
+  });
+
   it("keeps working when a blanked filter is marked required", async () => {
     writeFileSync(join(tree, ".gitattributes"), "*.py filter=lfsish\n");
     gitIn(tree, "config", "filter.lfsish.clean", `sh -c 'echo ran >> "${tree}/../filter-ran"; cat'`);

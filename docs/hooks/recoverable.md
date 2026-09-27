@@ -108,6 +108,6 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 - Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
 - A delete is judged against the repository its targets sit in. A sweep rooted above your repositories (`rm -rf ~/projects`) sits in none of them, and is not seen.
 - Ignored files are treated as rebuildable. A `.env` or a `.venv` is ignored and is not always rebuildable. Keep secrets somewhere a delete of the project cannot reach.
-- A very large work tree can make `git status` slower than the hook's eight-second budget. Then it asks, or denies a subagent.
+- Each git call RECOVERABLE makes has two seconds. A very large work tree can make one `git status` slower than that. Then it asks, or denies a subagent, and the reason says git timed out. The hook's whole budget is eight seconds, inside Claude Code's ten.
 
 Tests: `test/recoverable.test.mjs`.
