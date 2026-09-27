@@ -107,6 +107,7 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 - `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
 - Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
 - A delete is judged against the repository its targets sit in. A sweep rooted above your repositories (`rm -rf ~/projects`) sits in none of them, and is not seen.
+- On Windows there is no system `find` to dry-run with, so a `find` delete is judged against its whole root instead, the stricter answer. Windows is not claimed.
 - Ignored files are treated as rebuildable. A `.env` or a `.venv` is ignored and is not always rebuildable. Keep secrets somewhere a delete of the project cannot reach.
 - Each git call RECOVERABLE makes has two seconds. A very large work tree can make one `git status` slower than that. Then it asks, or denies a subagent, and the reason says git timed out. The hook's whole budget is eight seconds, inside Claude Code's ten.
 

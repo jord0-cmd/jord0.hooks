@@ -34,7 +34,7 @@ To silence DONE-GATE for one shell only: `export JORD0_DONE_GATE=0`.
 
 - Node.js 20 or newer on your PATH. The hooks run as `node` scripts.
 - git 2.26 or newer, for RECOVERABLE.
-- Linux. That is where the end-to-end run was driven. macOS and Windows are covered by CI once it runs there, and not claimed before.
+- Linux. That is where the end-to-end run was driven. macOS is claimed once CI has run there, not before. Windows is not claimed: RECOVERABLE's `find` dry run needs a POSIX `find`, and the tests need a POSIX shell.
 
 ## How they fail
 
