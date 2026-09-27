@@ -277,4 +277,9 @@ describe("round 1 of review: a malformed payload is not silence", () => {
     const result = await runHook("flag-probe", { tool_name: "Bash", tool_input: {}, cwd: dir }, { cwd: dir });
     assert.equal(decisionOf(result.answer), "ask");
   });
+
+  it("stays out of a call to another tool", async () => {
+    const payload = { tool_name: "BashOutput", tool_input: { bash_id: "b1" }, cwd: dir };
+    assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "silent");
+  });
 });

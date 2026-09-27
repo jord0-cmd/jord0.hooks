@@ -515,6 +515,11 @@ describe("the hook: a malformed payload", () => {
     assert.equal(decisionOf(result.answer), "ask");
     assert.match(reasonOf(result.answer), /no tool_input\.command string/); // not the failure path
   });
+
+  it("stays out of a call to another tool", async () => {
+    const payload = { tool_name: "BashOutput", tool_input: { bash_id: "b1" }, cwd: tree };
+    assert.equal(decisionOf((await runHook("recoverable", payload, { cwd: tree })).answer), "silent");
+  });
 });
 
 // ─── The whole hook: the shapes the dispatcher must see through ─────────────────────────
