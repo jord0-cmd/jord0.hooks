@@ -1,12 +1,15 @@
 // The fail policy: every way a hook can fail to do its job must still produce a decision.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { Fault, notice, permission, readPayload, stopFeedback } from "../lib/io.mjs";
 import { runGuard, runStop } from "../lib/runner.mjs";
-import { decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
+import { ROOT, decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
 
 const stdinOf = (text) => Readable.from([Buffer.from(text)]);
 const MAIN = { tool_name: "Bash", tool_input: { command: "ls" }, cwd: "/tmp" };
@@ -171,5 +174,38 @@ describe("the real entry scripts, spawned as hooks.json configures them", () => 
     const result = await runHook("done-gate", "not json");
     assert.equal(result.code, 0);
     assert.match(result.answer.systemMessage, /DONE-GATE could not read its input/);
+  });
+});
+
+describe("a stray error after the answer", () => {
+  // Claude Code reads a hook's JSON only on exit 0. Two unhandled rejections once crashed the
+  // process with exit 1 after the answer was printed, which throws the answer away.
+  const runner = pathToFileURL(join(ROOT, "lib", "runner.mjs")).href;
+  const straying = (entry, answer) => `
+    import { ${entry} } from ${JSON.stringify(runner)};
+    await ${entry}("TEST", async () => ({
+      judge: async () => {
+        Promise.reject(new Error("stray one"));
+        Promise.reject(new Error("stray two"));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return ${answer};
+      },
+    }));`;
+  const spawn = (script, payload) =>
+    spawnSync(process.execPath, ["--input-type=module", "-e", script], { input: JSON.stringify(payload), encoding: "utf8" });
+
+  it("a guard still exits 0 with exactly one answer", () => {
+    const ran = spawn(straying("guardMain", '{ decision: "ask", reason: "judged" }'), MAIN);
+    assert.equal(ran.status, 0, ran.stderr);
+    const lines = ran.stdout.trim().split("\n");
+    assert.equal(lines.length, 1, ran.stdout);
+    assert.equal(decisionOf(JSON.parse(lines[0])), "ask");
+  });
+
+  it("a Stop hook still exits 0 with exactly one answer", () => {
+    const stop = { hook_event_name: "Stop", stop_hook_active: false, last_assistant_message: "Done." };
+    const ran = spawn(straying("stopMain", '{ feedback: "judged" }'), stop);
+    assert.equal(ran.status, 0, ran.stderr);
+    assert.equal(ran.stdout.trim().split("\n").length, 1, ran.stdout);
   });
 });
