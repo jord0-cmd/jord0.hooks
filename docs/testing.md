@@ -82,4 +82,4 @@ Before anything was published, six Claude models read the code, each hunting a d
 
 Then every scenario runs through `claude -p`. Each one is judged from what really happened, never from what the model says it did: the tool calls and their results, the transcripts, including any subagent's, and the files left on disk.
 
-It needs a token from `claude setup-token`, passed to the container as an environment variable only.
+It needs Docker on the machine that runs it, and a token from `claude setup-token`. The token is read from `CLAUDE_CODE_OAUTH_TOKEN`, or from `~/.config/jord0-hooks-e2e/token`, and reaches the container as an environment variable only. Every scenario is a real session. Billed to that token.

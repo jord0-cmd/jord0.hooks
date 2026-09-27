@@ -52,7 +52,7 @@ RECOVERABLE asks git, not a list of dangerous paths. When it runs git inside you
 
 ## Tests
 
-`npm test` runs the unit suite on Node's built-in runner, with no dev dependencies. Every hardening test was proven able to fail, by removing the thing it guards and watching it go red. `npm run e2e` installs the plugin into a stock Claude Code in a container and drives each hook through a real session. It needs a token from `claude setup-token`.
+`npm test` runs the unit suite on Node's built-in runner, with no dev dependencies. Every hardening test was proven able to fail, by removing the thing it guards and watching it go red. `npm run e2e` installs the plugin into a stock Claude Code in a container and drives each hook through a real session. It needs Docker and a token from `claude setup-token`.
 
 ## License
 
