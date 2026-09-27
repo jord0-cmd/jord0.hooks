@@ -366,6 +366,43 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     }
   });
 
+  describe("a git command that names its repository", () => {
+    // The command runs from a clean directory outside the dirty tree.
+    let away;
+    const from = (extra = {}) => ({ ...ctx(), base: away, resolve: (w) => resolveWord(w, { cwd: away }), ...extra });
+    beforeEach(() => {
+      away = join(tree, "..", "away");
+      mkdirSync(away);
+    });
+
+    for (const spell of [
+      (t) => `git --work-tree=${t} --git-dir=${t}/.git clean -fd`,
+      (t) => `git --git-dir=${t}/.git --work-tree=${t} checkout -- .`,
+      (t) => `git --git-dir ${t}/.git --work-tree ${t} reset --hard`,
+    ]) {
+      it(`asks about the repository it names: ${spell("<tree>")}`, async () => {
+        assert.equal((await judges.git(words(spell(tree)), from()))?.decision, "ask");
+      });
+    }
+
+    it("reads GIT_DIR and GIT_WORK_TREE from the command's prefix", async () => {
+      const prefix = [["GIT_DIR", `${tree}/.git`], ["GIT_WORK_TREE", tree]];
+      assert.equal((await judges.git(words("git clean -fd"), from({ prefix })))?.decision, "ask");
+      assert.equal((await judges.git(words("git clean -fd"), from({ prefix, agentId: "agent-1" })))?.decision, "deny");
+    });
+
+    it("treats the working directory as the work tree when only --git-dir is given, as git does", async () => {
+      writeFileSync(join(away, "draft.md"), "mine");
+      const v = await judges.git(words(`git --git-dir=${tree}/.git clean -fd`), from());
+      assert.equal(v?.decision, "ask");
+      assert.match(v.reason, /draft\.md/);
+    });
+
+    it("stays silent when the repository it names has nothing at stake", async () => {
+      assert.equal(await judges.git(words(`git --git-dir=${tree}/.git --work-tree=${tree} clean -fdX`), from()), null);
+    });
+  });
+
   it("judges where it runs when a list file names something that does not resolve", async () => {
     writeFileSync(join(tree, "quoted.txt"), '"wip"\n');
     const v = await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "quoted.txt" }, ctx());
@@ -482,6 +519,8 @@ const LOUD = [
   "echo hi > $(rm -rf wip)",
   "cat <<EOF\n$(rm -rf wip)\nEOF",
   "cat <<EOF; rm -rf wip\nbody\nEOF", // valid bash the grammar cannot parse: judged where it runs
+  "cd .. && git --git-dir=tree/.git --work-tree=tree checkout -- .",
+  "cd .. && GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", // the dispatcher hands the judge `prefix`
 ];
 
 const QUIET = [

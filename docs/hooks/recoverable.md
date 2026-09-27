@@ -36,6 +36,8 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 
 Deleting one file on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. Several files, anything recursive, and every delete a subagent makes are judged.
 
+A git command that names its repository, with `--git-dir`, `--work-tree`, or `GIT_DIR=` and `GIT_WORK_TREE=` in front of it, is judged in that repository. With `--git-dir` alone, git treats the working directory as the work tree, and so does the guard.
+
 A word the guard cannot read, such as `$(git diff --name-only)` or an unset variable, is judged by where the command runs. An unreadable word is not a word that names nothing.
 
 ## Finding the command

@@ -45,6 +45,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | `time { rm -rf wip; }` and a redirection's `$( … )` hide no command | the reserved word blanked, redirections walked | red, three tests |
 | a command the grammar cannot parse is not cleared | the parse-error check, in each hook | red, three tests |
 | `git clean -d` deletes when `clean.requireForce` is false | reading the setting, and `-c` / `--config-env` | red, two tests |
+| `--git-dir`, `--work-tree` and `GIT_DIR=` are judged in the repository they name | the location passed to every git call | red, five tests |
 
 One of them lied first.
 
