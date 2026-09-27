@@ -39,7 +39,7 @@ describe("DONE-GATE refuses", () => {
   it("when a failing run was piped into tail, which hid its exit status", async () => {
     const steps = [edit("/w/m.py"), bash("pytest -q | tail -3", { output: "3 passed, 2 failed in 0.4s" })];
     const out = await verdict(stop(steps, "Done."));
-    assert.match(out.feedback, /“2 failed”, and the pipe hid the exit status/);
+    assert.match(out.feedback, /its output says “3 passed, 2 failed in 0\.4s”, and the command hid the exit status/);
   });
 
   it("an in-place sed edit counts as a code edit", async () => {
@@ -171,5 +171,68 @@ describe("recognising a test run", () => {
     const steps = [edit("/w/a.py"), bash("./scripts/verify.sh --all")];
     const env = { JORD0_DONE_GATE_COMMANDS: "make ci, ./scripts/verify.sh" };
     assert.equal(await verdict(stop(steps, "Done."), env), null);
+  });
+});
+
+describe("round 1 of review: DONE-GATE", () => {
+  const edited = [edit("/w/src/app.py")];
+
+  for (const final of ["Now all tests pass.", "Note: all tests pass.", "No failing tests remain; all tests pass.", "The tests are passing."]) {
+    it(`reads ${JSON.stringify(final)} as a claim`, async () => {
+      assert.match((await verdict(stop(edited, final)))?.feedback ?? "", /no test has run since/);
+    });
+  }
+
+  it("does not read a traffic light that is green as a claim", async () => {
+    assert.equal(await verdict(stop(edited, "The traffic light is green.")), null);
+  });
+
+  it("does not let a qualified admission excuse the whole piece of work", async () => {
+    const final = "Fixed and all tests pass. I have not tested on Windows.";
+    assert.match((await verdict(stop(edited, final)))?.feedback ?? "", /no test has run since/);
+  });
+
+  it("never lets an admission excuse a run that failed", async () => {
+    const steps = [edit("/w/lib.rs"), bash("cargo test", { error: true, output: "Exit code 101\n" })];
+    const out = await verdict(stop(steps, "Done. I haven't run the full suite."));
+    assert.match(out?.feedback ?? "", /failed: `cargo test` \(exit code 101\)/);
+  });
+
+  for (const command of ["pytest; echo finished", "pytest || true"]) {
+    it(`reads the output when \`${command}\` hides the exit status`, async () => {
+      const steps = [edit("/w/m.py"), bash(command, { output: "==== 2 failed, 8 passed in 0.3s ====\nfinished" })];
+      assert.match((await verdict(stop(steps, "Done.")))?.feedback ?? "", /2 failed, 8 passed/);
+    });
+  }
+
+  it("does not take pipefail from a commit message", async () => {
+    const steps = [edit("/w/m.py"), bash('git commit -qm "add pipefail note" && pytest | tail -1', { output: "1 failed, 3 passed in 0.1s" })];
+    assert.match((await verdict(stop(steps, "Done.")))?.feedback ?? "", /1 failed, 3 passed/);
+  });
+
+  it("does not read a number in a log line as a failure tally", async () => {
+    const steps = [edit("/w/m.py"), bash("pytest | tail -2", { output: "Reproducing issue 5 failed to trigger\n12 passed in 0.2s" })];
+    assert.equal(await verdict(stop(steps, "Done.")), null);
+  });
+
+  const counted = [
+    "env -u HOME pytest",
+    "cargo +nightly test",
+    "mvn clean test",
+    "make -j 4 test",
+    "pnpm --filter web test",
+    "python manage.py test",
+    "docker compose run app pytest",
+  ];
+  for (const command of counted) {
+    it(`counts \`${command}\` as a test run`, async () => {
+      const { listCommands } = await import("../lib/shell.mjs");
+      const [first] = (await listCommands(command)).events;
+      assert.equal(isTestCommand(first.argv), true);
+    });
+  }
+
+  it("does not count `npm run test-data-generator` as a test run", () => {
+    assert.equal(isTestCommand(["npm", "run", "test-data-generator"]), false);
   });
 });

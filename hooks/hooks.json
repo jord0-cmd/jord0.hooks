@@ -32,6 +32,7 @@
             "type": "command",
             "command": "node",
             "args": [
+              "--liftoff-only",
               "${CLAUDE_PLUGIN_ROOT}/bin/done-gate.mjs"
             ],
             "timeout": 10
