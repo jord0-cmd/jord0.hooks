@@ -1,0 +1,94 @@
+# RECOVERABLE
+
+<span class="tag event">PreToolUse · Bash</span> asks git, before a delete or a discard, whether the work it would destroy can ever come back.
+
+<div class="stops" markdown>
+**Stops this**
+A delete or a git discard that would destroy untracked files or uncommitted edits. On the main thread it <span class="tag ask">asks</span>. Inside a subagent it <span class="tag deny">denies</span>.
+</div>
+
+## The failure
+
+A research subagent carried a scope note naming its own files. It looked at `git status`, and everything else in the tree read as clutter. It ran `find <dir> -depth -delete` on an untracked directory. That directory was the main session's project, never committed. Then it reverted two uncommitted fixes with `git checkout -- <files>`.
+
+The guard of the day allowed both. It asked the wrong question: is this a dangerous place? The deleted directory was an ordinary place. What made it unrecoverable was that its bytes had never reached git's object store.
+
+## The question it asks
+
+Would this command destroy untracked, not-ignored files, or uncommitted edits? No spellings to enumerate. A command destroys such bytes or it does not. Git says which.
+
+So these stay silent by construction: ignored files (`node_modules/`, `build/`, `*.pyc`), tracked files with no edits, dry runs, `git restore --staged`. A rebuild or a checkout gives them back.
+
+| Command | What would be lost |
+|---------|--------------------|
+| `rm -r`, `unlink`, `shred` | untracked files and uncommitted edits under the targets |
+| `find … -delete`, `find … -exec rm … {}` | the same, for exactly what the find matches (dry-run first) |
+| `… \| xargs rm` | the same, for what feeds it: a printing `find`, a list file, or where it runs |
+| `git checkout -- f`, `git restore f` | unstaged edits (a staged edit survives a restore from the index) |
+| `git checkout HEAD -- f`, `git restore -SW f` | every uncommitted edit, staged or not |
+| `git checkout -f`, `git switch -f`, `git switch --discard-changes`, `git reset --hard` | every uncommitted edit in the tree |
+| `git checkout-index -f` | unstaged edits to the files it rewrites |
+| `git clean -f` | untracked files (not `-n`, not `-X`) |
+| `git rm -f` | uncommitted edits to the files it removes (plain `git rm` already refuses) |
+| `git stash drop`, `git stash clear` | the stash, when it holds anything |
+
+A single-file `rm` on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. Inside a subagent every delete is judged.
+
+## Finding the command
+
+Commands are found by tree-sitter's bash grammar, not by splitting text on `;` and `&&`. A delete inside `( … )`, `if … then … fi`, a `for` loop, `$( … )`, `eval '…'`, `bash -c '…'` or a heredoc fed to `bash` is still a delete. A delete that is only mentioned (`grep -rn "rm -rf" .`, a heredoc fed to `cat`, a commit message) is not. `((rm -rf wip))` is bash arithmetic and runs nothing.
+
+## Asking git safely
+
+A security hook that runs `git status` runs it inside whatever repository the command points at, and a repository's own config can name programs for git to run. Two of them run during a plain `git status`, and both were driven doing it:
+
+- `core.fsmonitor`, a program git asks what changed.
+- a `clean` filter, chosen by `.gitattributes` (which is committed, so it arrives with a clone), which git pipes a file through whenever it has to hash it.
+
+So every git call RECOVERABLE makes pins `core.fsmonitor` off, blanks every filter driver the repository's own config defines, and pins signature checks off. Reading config runs nothing, so the drivers are listed first. Drivers from your global config, git-lfs for one, are yours and keep working.
+
+The dry run of a `find` uses the system `find` by absolute path. A file called `find` in the working directory is never executed.
+
+## What it returns
+
+On the main thread:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "ask",
+    "permissionDecisionReason": "RECOVERABLE: `rm` would destroy work git cannot give back: wip/deep/plate.png, wip/notes.md (2 paths, untracked or edited and uncommitted)."
+  }
+}
+```
+
+Inside a subagent:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "RECOVERABLE: `git checkout` would destroy uncommitted work that is not yours: src/mod.py. Git cannot give it back. Other untracked and uncommitted work in this repository belongs to the main session: do not delete, revert, stash or clean anything you did not create. Leave it as it is and report what you found."
+  }
+}
+```
+
+The subagent's reason says whose the work is, because a scope note is what made the incident's agent read everything else as clutter.
+
+When git cannot answer inside a repository (an error, a timeout, a git older than 2.26), the main thread gets `ask` and a subagent gets `deny`, with the reason. Never an allow.
+
+## When not to use it
+
+Outside git it says nothing, so it does nothing for work that was never in a repository.
+
+## Limits
+
+It raises the floor against a tidy-minded agent. It is not a sandbox against an adversary.
+
+- `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
+- Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
+- A `find` is judged against the repository of its root. A sweep rooted above several repositories is judged at its root.
+
+Tests: `test/recoverable.test.mjs`.

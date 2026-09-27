@@ -1,0 +1,75 @@
+# DONE-GATE
+
+<span class="tag event">Stop</span> refuses the stop once, with feedback, when the final message claims the work is done and nothing proves it.
+
+<div class="stops" markdown>
+**Stops this**
+"Done, all fixed" after a code edit, when no test has run since that edit, or when the last one failed.
+</div>
+
+## The failure
+
+A turn ended on "all green". Ninety-two tests had passed. They were a subset. The suite beside them never ran, and the claim read exactly the same as it would have if it had.
+
+The same claim turns up in three other shapes. A test ran before the last edit. A test ran and failed, but its output went through `tail`, which exits 0. Or nothing ran at all. The person reading "done" cannot tell any of these apart.
+
+## What it checks
+
+When Claude is about to stop, DONE-GATE reads the final message and then what the session did, in order:
+
+1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", and the like. A negated claim ("nothing is committed") does not count, and neither does a word inside backticks or quotes.
+2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. Markdown, text, images and CSV do not count.
+3. After the last such edit, did a test command run, and did it pass?
+
+It knows the test runners people use: pytest, `python -m pytest`, tox, nox, jest, vitest, mocha, `node --test`, `deno test`, `cargo test`, `cargo nextest`, `go test`, `mvn test`, `gradle test`, `dotnet test`, rspec, `mix test`, `swift test`, ctest, phpunit, bats, plus `npm test`, `npm run test:*`, `make test` and `make check`. It sees through `timeout`, `env`, `uv run`, `poetry run`, `npx` and `bundle exec`. Anything else can be named in `JORD0_DONE_GATE_COMMANDS`.
+
+## The pipe that hides a failure
+
+`pytest | tail -3` exits with `tail`'s status, which is 0 however many tests failed. When a test run is piped and `pipefail` is not set, DONE-GATE reads the output for the summary lines the runners print: "3 failed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". Otherwise it trusts the exit status.
+
+## What it returns
+
+Nothing, when there is nothing to say. When it refuses:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "Stop",
+    "additionalContext": "DONE-GATE: your final message says “Done, the parser is fixed.”, but parser.py was edited and no test has run since. Run the project's tests now and quote the result line, or say plainly that this work is not verified."
+  }
+}
+```
+
+And when the last run failed behind a pipe:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "Stop",
+    "additionalContext": "DONE-GATE: your final message says “All tests pass.”, but the last test run after your edits failed: `pytest -q | tail -3` (its output says “1 failed”, and the pipe hid the exit status). Fix it and run it again, or say plainly that the work is not done."
+  }
+}
+```
+
+`additionalContext` is the channel Claude Code documents for a Stop hook working as designed. It keeps Claude going like a block does, without a hook-error banner.
+
+## When it lets the stop through
+
+- A test ran after the last edit and passed.
+- The final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice.
+- `stop_hook_active` is true, which means Claude is already continuing because of a refusal. DONE-GATE refuses at most once per stop.
+- `JORD0_DONE_GATE=0` is set.
+- It cannot read the transcript. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.
+
+## When not to use it
+
+In a repository with no tests, it will ask every time you claim done after an edit. Name your own check in `JORD0_DONE_GATE_COMMANDS`, or disable the plugin there.
+
+## Limits
+
+- It reads Claude Code's session transcript, whose format is internal to Claude Code. If that format changes and nothing can be read, the hook says so and checks nothing.
+- Edits made inside a subagent live in the subagent's transcript, not the main one.
+- A test run started in the background reports "running", not a result. It counts as run.
+- Claims are recognised in English.
+
+Tests: `test/done-gate.test.mjs`.
