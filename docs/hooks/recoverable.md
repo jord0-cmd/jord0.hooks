@@ -106,6 +106,8 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 
 - `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
 - It reads the program a command names. A name built at run time is not read: `R=rm; $R -rf wip`, `eval "$(echo rm -rf wip)"`, `$(which rm) -rf wip`. Reaching those is the adversary this hook is not built to stop.
+- A discard whose paths come from a feed, not the command line, is a floor: `git diff --name-only | xargs git checkout --`, `find … -exec git checkout -- {} +`. The paths are an open-ended set, and judging them would mean either a false alarm on the safe git commands (`git rm --cached`, `git restore --staged`) or reproducing the git judge. A piped or matched `rm` is still judged. Only git through a feed is not.
+- `printf '…' | bash` and `flock … -c '…'` are floors: the script is `printf`'s format or `flock`'s `-c` string, which this hook does not reconstruct. `echo '…' | bash` and `bash -c` are read.
 - Submodules are compared by commit only. Their work trees would need git to run under their own config, which this hook has not read.
 - A delete is judged against the repository its targets sit in. A sweep rooted above your repositories (`rm -rf ~/projects`) sits in none of them, and is not seen.
 - On Windows there is no system `find` to dry-run with, so a `find` delete is judged against its whole root instead, the stricter answer. Windows is not claimed.

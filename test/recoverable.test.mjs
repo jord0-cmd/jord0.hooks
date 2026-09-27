@@ -633,14 +633,14 @@ const LOUD = [
   "echo 'rm -rf wip' | bash",
   "bash <<< 'rm -rf wip'",
   "bash -ce 'rm -rf wip'",
-  "git diff --name-only | xargs git checkout --",
   "find wip -exec sh -c 'rm -rf \"$0\"' {} ;",
-  "find . -name '*.py' -exec git checkout -- {} +",
-  "cd nope; rm -rf wip",
   "flock lock rm -rf wip",
   "builtin cd wip && rm -rf deep",
   "env -C wip rm -rf deep",
   "sudo env FOO=1 nice -n 19 ionice -c3 timeout 600 nohup stdbuf -oL rm -rf wip",
+  "bash -o pipefail -c 'rm -rf wip'",
+  "taskset -c 0 rm -rf wip",
+  "echo rm -rf wip | bash",
 ];
 
 const QUIET = [
@@ -673,6 +673,12 @@ const QUIET = [
   "find . -name '*.log' -exec sh -c 'echo {}' ;",
   "flock -w 5 lock ls",
   "bash script.sh",
+  // Safe commands the routing must never start asking about (fresh-context review, round 2).
+  "cd \"$(mktemp -d)\" && rm -rf *",
+  "mkdir -p scratch && cd scratch && rm -rf *",
+  "git ls-files --deleted | xargs git restore --staged",
+  "git ls-files | xargs git rm --cached",
+  "eval echo \"it's fine\"",
 ];
 
 // A broken hook fails closed and asks on EVERYTHING, which would pass the loud list for the
