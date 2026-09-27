@@ -289,6 +289,23 @@ describe("round 1b: DONE-GATE", () => {
     assert.match(out.feedback, /can be named in JORD0_DONE_GATE_COMMANDS/);
   });
 
+  for (const honest of [
+    "Implemented the parser. The tests were not run.",
+    "Implemented the parser. I was unable to run the tests.",
+    "Implemented the parser. The tests have not been run.",
+    "Implemented the parser. I wasn't able to run the tests.",
+  ]) {
+    it(`takes an honest admission: ${honest.split(". ")[1]}`, async () => {
+      assert.equal(await verdict(stop([edit("/w/a.py")], honest)), null);
+    });
+  }
+
+  for (const final of ["Fixed. I did not run into any issues.", "Done, and it did not run out of memory.", "Done. I was able to run the tests."]) {
+    it(`is not fooled by a phrase that admits nothing: ${final}`, async () => {
+      assert.match((await verdict(stop([edit("/w/a.py")], final)))?.feedback ?? "", /no test has run since/);
+    });
+  }
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);

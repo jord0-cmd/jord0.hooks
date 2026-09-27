@@ -42,6 +42,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a failed push after passing tests is not a failed test run | the exit status read only when it is the test's own | red, two tests |
 | an edit to `.gitignore` or a licence needs no test | the furniture list | red, six tests |
 | `pnpm vitest run`, `bazel test`, `sbt test` and five more are test runs | the runner vocabulary | red, ten tests |
+| "The tests were not run" is an admission, "I did not run into any issues" is not | the admission vocabulary and its guard | red, six tests |
 | several files deleted on the main thread | the one-file exemption | red |
 | a magic pathspec judges the whole tree | pathspec magic | red |
 | deleting `.git` counts commits on no remote | the history check | red |
