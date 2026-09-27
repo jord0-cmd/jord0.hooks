@@ -8,6 +8,7 @@ import { listCommands, resolveWord } from "../lib/shell.mjs";
 const commands = async (text) =>
   (await listCommands(text)).events.filter((e) => e.kind === "command");
 const argvs = async (text) => (await commands(text)).map((c) => c.argv.join(" "));
+const argvOf = (listing) => listing.events.filter((e) => e.kind === "command").map((c) => c.argv.join(" "));
 
 describe("listing commands", () => {
   it("splits a plain sequence in source order", async () => {
@@ -97,6 +98,43 @@ describe("listing commands", () => {
 
   it("treats (( … )) as arithmetic, which runs no command", async () => {
     assert.deepEqual(await argvs("((rm -rf wip))"), []);
+  });
+
+  it("lists what a `time` or `coproc` reserved word runs, which the grammar reads as a command", async () => {
+    for (const text of [
+      "time ( rm -rf wip )",
+      "time { rm -rf wip; }",
+      "time -p -- rm -rf wip",
+      "time -p ( rm -rf wip )",
+      "time time rm -rf wip",
+      "coproc ( rm -rf wip )",
+      "coproc W { rm -rf wip; }",
+      "coproc rm -rf wip",
+      "echo é; time { rm -rf wip; }", // offsets past a non-ASCII character
+    ]) {
+      const listing = await listCommands(text);
+      assert.ok(argvOf(listing).includes("rm -rf wip"), `${text}: ${argvOf(listing)}`);
+      assert.equal(listing.hasError, false, text);
+    }
+    assert.deepEqual(await argvs("time { pytest; }"), ["pytest"]);
+  });
+
+  it("leaves `\\time` alone: it is the program /usr/bin/time, not the reserved word", async () => {
+    assert.deepEqual(await argvs("\\time rm x"), ["time rm x"]);
+    assert.deepEqual(await argvs("echo time rm"), ["echo time rm"]);
+  });
+
+  it("lists the commands a redirection runs, and nothing from a quoted heredoc", async () => {
+    assert.deepEqual(await argvs("echo hi > $(rm -rf wip)"), ["rm -rf wip", "echo hi"]);
+    assert.deepEqual(await argvs("cat < <(rm -rf wip)"), ["rm -rf wip", "cat"]);
+    assert.deepEqual(await argvs("cat <<EOF\n$(rm -rf wip)\nEOF"), ["rm -rf wip", "cat"]);
+    assert.deepEqual(await argvs("a | b > $(rm -rf wip)"), ["rm -rf wip", "a", "b"]);
+    assert.deepEqual(await argvs("{ a; } > $(rm -rf wip)"), ["rm -rf wip", "a"]);
+    assert.deepEqual(await argvs("cat <<'EOF'\n$(rm -rf wip)\nEOF"), ["cat"]);
+  });
+
+  it("lists a statement the grammar hangs under a command instead of dropping it", async () => {
+    assert.ok((await argvs("sudo ( rm -rf wip )")).includes("rm -rf wip"));
   });
 
   it("reports an unparseable span instead of pretending the text was clean", async () => {

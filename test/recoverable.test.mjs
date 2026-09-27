@@ -414,6 +414,12 @@ const LOUD = [
   "git checkout-index -f -a",
   "git rm -f src/mod.py",
   "git rm -rf src",
+  // Round 1b: statements behind bash's reserved words, and commands a redirection runs.
+  "time ( rm -rf wip )",
+  "time { rm -rf wip; }",
+  "coproc ( rm -rf wip )",
+  "echo hi > $(rm -rf wip)",
+  "cat <<EOF\n$(rm -rf wip)\nEOF",
 ];
 
 const QUIET = [
@@ -438,6 +444,7 @@ const QUIET = [
   "git switch -c other",
   "git rm --cached src/mod.py",
   "echo done > wip/notes.md.bak",
+  "cat <<'EOF'\n$(rm -rf wip)\nEOF",
 ];
 
 // A broken hook fails closed and asks on EVERYTHING, which would pass the loud list for the
