@@ -109,6 +109,15 @@ describe("listing commands", () => {
     assert.deepEqual(await argvs("((rm -rf wip))"), []);
   });
 
+  it("does not call arithmetic unreadable: an error inside (( … )) hides no command", async () => {
+    // `rm -rf wip` is not valid arithmetic, so tree-sitter marks it an error, but bash runs
+    // nothing there. A caller that treats hasError as "a command may be hidden" must not be
+    // tripped by it, while a genuinely unreadable command still reports true.
+    assert.equal((await listCommands("((rm -rf wip))")).hasError, false);
+    assert.equal((await listCommands("(( x = 1 ))")).hasError, false);
+    assert.equal((await listCommands("cat <<EOF; rm -rf wip\nbody\nEOF")).hasError, true);
+  });
+
   it("lists what a `time` or `coproc` reserved word runs, which the grammar reads as a command", async () => {
     for (const text of [
       "time ( rm -rf wip )",
