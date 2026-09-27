@@ -1,7 +1,11 @@
 # Security
 
-These hooks run inside your Claude Code session and execute `git` and `find` on your machine. A bug that makes a guard allow what it should refuse, or run something it should not, is a security bug.
+These hooks run inside your Claude Code session. They execute `git` and `find` on your machine.
 
-Report one through GitHub's private vulnerability reporting on this repository, not a public issue. Include the exact Bash command, the working tree's state (`git status --porcelain`), and the JSON the hook printed.
+A bug that makes a guard allow what it should refuse is a security bug. So is one that makes it run something it should not.
 
-What is out of scope is written down on each hook's page under Limits. RECOVERABLE raises the floor against a tidy-minded agent. It is not a sandbox.
+Report it privately. Use GitHub's private vulnerability reporting on this repository, not a public issue. Send three things: the exact Bash command, the state of the tree from `git status --porcelain`, and the JSON the hook printed.
+
+What is out of scope sits on each hook's page, under Limits.
+
+RECOVERABLE raises the floor against a tidy-minded agent. It is not a sandbox.
