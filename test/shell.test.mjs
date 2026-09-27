@@ -118,6 +118,13 @@ describe("listing commands", () => {
     assert.equal((await listCommands("cat <<EOF; rm -rf wip\nbody\nEOF")).hasError, true);
   });
 
+  it("a `$( )` runs commands whatever encloses it, so its error is not arithmetic-hidden", async () => {
+    // The command hides in `$( )` nested in a test or an arithmetic expansion, which share
+    // expression node types with `(( ))` but still run the substitution's commands.
+    assert.equal((await listCommands("[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]")).hasError, true);
+    assert.equal((await listCommands("echo $(( 1 + $(cat <<EOF; rm\nEOF\n) ))")).hasError, true);
+  });
+
   it("lists what a `time` or `coproc` reserved word runs, which the grammar reads as a command", async () => {
     for (const text of [
       "time ( rm -rf wip )",

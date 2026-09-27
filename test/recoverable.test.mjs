@@ -685,6 +685,30 @@ describe("the hook: loud shapes ask the main thread and are denied to a subagent
   });
 });
 
+describe("the hook: shapes a fresh-context review turned up", () => {
+  // Each is valid bash that deletes (or the control that must not), driven through the real hook.
+  const asks = [
+    "[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]", // a command hidden in $( ) under [[ ]], not arithmetic
+    "sh -c 'cat <<EOF; rm -rf wip\nbody\nEOF'",         // the unparsed span is in the nested payload
+    "command rm -v -rf wip",                              // -v is rm's flag, not `command`'s lookup
+    "exec rm -rf wip",
+    "eval eval eval eval eval eval rm -rf wip",           // past the recursion cap: judged, not dropped
+  ];
+  for (const command of asks) {
+    it(JSON.stringify(command), async () => {
+      const main = await hook(command);
+      assert.equal(main.decision, "ask", command);
+      const sub = await hook(command, { agent: true });
+      assert.equal(sub.decision, "deny", command);
+    });
+  }
+
+  it("still stays silent on arithmetic and a genuine `command` lookup", async () => {
+    assert.equal((await hook("((rm -rf wip))")).decision, "silent");
+    assert.equal((await hook("command -v rm")).decision, "silent");
+  });
+});
+
 describe("the hook: quiet shapes stay silent in a dirty tree", () => {
   for (const command of QUIET) {
     it(JSON.stringify(command), async () => {
