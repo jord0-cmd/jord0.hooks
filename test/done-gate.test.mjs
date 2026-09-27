@@ -259,6 +259,18 @@ describe("round 1b: DONE-GATE", () => {
     assert.match(out.feedback, /failed: `pytest -q; git push` \(its output says “2 failed, 7 passed in 0\.12s”/);
   });
 
+  for (const file of [".gitignore", "LICENSE", ".gitattributes", ".editorconfig", "CODEOWNERS", "COPYING"]) {
+    it(`lets the stop through after an edit to ${file}, which no test could check`, async () => {
+      assert.equal(await verdict(stop([edit(`/w/${file}`)], "Done.")), null);
+    });
+  }
+
+  for (const file of ["Dockerfile", ".env.example", "package.json", "Makefile"]) {
+    it(`still counts an edit to ${file}, which changes what builds and runs`, async () => {
+      assert.match((await verdict(stop([edit(`/w/${file}`)], "Done.")))?.feedback ?? "", /was edited and no test has run since/);
+    });
+  }
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);

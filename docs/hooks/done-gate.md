@@ -20,7 +20,7 @@ DONE-GATE catches those three. Not the subset. It sees that a test ran after the
 When Claude is about to stop, DONE-GATE reads the final message and then what the session did, in order:
 
 1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", and the like. A negated claim ("nothing is committed") does not count, and neither does a word inside backticks or quotes.
-2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. Markdown, text, images and CSV do not count.
+2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. Markdown, text, images and CSV do not count, and neither do `.gitignore`, `.gitattributes`, `.editorconfig`, `CODEOWNERS` or a licence: nothing runs them. A `Dockerfile`, an `.env.example` and JSON do count. An edit to them changes what builds and runs.
 3. After the last such edit, did a test command run, and did it pass?
 
 It knows the test runners people use: pytest, `python -m pytest`, `python manage.py test`, tox, nox, jest, vitest, mocha, `node --test`, `deno test`, `cargo test` (toolchain too), `cargo nextest`, `go test`, `mvn clean test`, `gradle test`, `dotnet test`, rspec, `mix test`, `swift test`, ctest, phpunit, bats, plus `npm test`, `npm run test:*`, `pnpm --filter x test`, `make test` and `make -j 4 check`. It sees through `timeout`, `env`, `nice`, `uv run`, `poetry run`, `npx`, `bundle exec` and `docker compose run`. Anything else can be named in `JORD0_DONE_GATE_COMMANDS`.
