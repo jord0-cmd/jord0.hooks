@@ -366,6 +366,17 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     }
   });
 
+  it("counts a commit made on a detached HEAD, or kept only by a tag, as history on no remote", async () => {
+    gitIn(tree, "update-ref", "refs/remotes/origin/main", "HEAD"); // every branch is pushed
+    assert.equal(await judges.rm(words("rm -rf .git"), ctx()), null);
+    gitIn(tree, "checkout", "-q", "--detach");
+    gitIn(tree, "commit", "--allow-empty", "-qm", "made while detached");
+    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+    gitIn(tree, "tag", "kept");
+    gitIn(tree, "checkout", "-q", "main");
+    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+  });
+
   describe("a git command that names its repository", () => {
     // The command runs from a clean directory outside the dirty tree.
     let away;

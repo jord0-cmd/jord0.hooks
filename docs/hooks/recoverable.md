@@ -22,7 +22,7 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 | Command | What would be lost |
 |---------|--------------------|
 | `rm -r`, or `rm` / `unlink` / `shred` of several files | untracked files and uncommitted edits under the targets |
-| `rm -rf .git`, or the whole work tree | the same, and every commit on no remote, and the stash |
+| `rm -rf .git`, or the whole work tree | the same, and every commit on no remote (on a branch, a tag or a detached HEAD), and the stash |
 | `find … -delete`, `find … -exec rm … {}` | the same, for exactly what the find matches (dry-run first) |
 | `… \| xargs rm` | the same, for what feeds it: a printing `find`, a list file, or where it runs |
 | `git checkout -- f`, `git restore f` | unstaged edits (a staged edit survives a restore from the index) |

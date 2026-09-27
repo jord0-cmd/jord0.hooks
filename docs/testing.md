@@ -46,6 +46,8 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a command the grammar cannot parse is not cleared | the parse-error check, in each hook | red, three tests |
 | `git clean -d` deletes when `clean.requireForce` is false | reading the setting, and `-c` / `--config-env` | red, two tests |
 | `--git-dir`, `--work-tree` and `GIT_DIR=` are judged in the repository they name | the location passed to every git call | red, five tests |
+| a commit on a detached HEAD or a tag counts as history | every ref, not only branches | red |
+| the stash is not counted twice | `refs/stash` excluded from the commit count | red |
 
 One of them lied first.
 
