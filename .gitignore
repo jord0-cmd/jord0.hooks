@@ -1,0 +1,4 @@
+node_modules/
+/e2e/report/
+/site/
+.DS_Store

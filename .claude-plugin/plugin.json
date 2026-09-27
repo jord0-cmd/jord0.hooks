@@ -1,0 +1,10 @@
+{
+  "name": "jord0-hooks",
+  "version": "1.0.0",
+  "description": "Three hooks that stop three real failures: a \"done\" with no test run since the last edit, a delete git cannot give back, and --help on a script nobody read.",
+  "author": { "name": "Jordo", "email": "jordo@jord0.net", "url": "https://github.com/jord0-cmd" },
+  "homepage": "https://jord0-cmd.github.io/jord0.hooks",
+  "repository": "https://github.com/jord0-cmd/jord0.hooks",
+  "license": "MIT",
+  "keywords": ["hooks", "guardrails", "git", "testing", "safety"]
+}
