@@ -36,6 +36,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | `Now all tests pass.` is a claim | whole-word negation | red, three tests |
 | `pytest; echo done` hides the exit status | "not the last command" | red, two tests |
 | an admission never excuses a failed run | the failed-run check | red |
+| a failed push after passing tests is not a failed test run | the exit status read only when it is the test's own | red, two tests |
 | several files deleted on the main thread | the one-file exemption | red |
 | a magic pathspec judges the whole tree | pathspec magic | red |
 | deleting `.git` counts commits on no remote | the history check | red |

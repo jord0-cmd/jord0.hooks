@@ -245,6 +245,20 @@ describe("round 1b: DONE-GATE", () => {
     assert.match(out.feedback, /no test this hook can recognise has run since \(it could not parse `cat <<EOF; pytest -q`\)/);
   });
 
+  it("does not blame the tests for a failure in a command after them", async () => {
+    const run = bash("pytest -q; git push", { error: true, output: "Exit code 1\n9 passed in 0.12s\nfatal: no upstream" });
+    const out = await verdict(stop([edit("/w/a.py"), run], "Done, all tests pass."));
+    assert.doesNotMatch(out.feedback, /the last test run after your edits failed/);
+    assert.match(out.feedback, /`pytest -q; git push` ended with exit code 1 from a command after the tests/);
+    assert.match(out.feedback, /Quote the test run's own result line/);
+  });
+
+  it("still reads a failure tally behind a hidden exit status", async () => {
+    const run = bash("pytest -q; git push", { error: true, output: "Exit code 1\n2 failed, 7 passed in 0.12s" });
+    const out = await verdict(stop([edit("/w/a.py"), run], "Done."));
+    assert.match(out.feedback, /failed: `pytest -q; git push` \(its output says “2 failed, 7 passed in 0\.12s”/);
+  });
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);

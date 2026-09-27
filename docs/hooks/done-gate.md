@@ -31,6 +31,8 @@ A Bash call exits with its last command's status. `pytest | tail -3` exits with 
 
 So when a test run is piped onward without `pipefail`, or followed by anything, DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status.
 
+The hidden status cuts both ways. In `pytest -q; git push`, a push that fails exits 1 after nine tests passed. With no failure line in the output, DONE-GATE does not blame the tests. It says the status belongs to a command after them, and asks for the test run's own result line.
+
 ## What it returns
 
 Nothing, when there is nothing to say. When it refuses:
