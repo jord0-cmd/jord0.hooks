@@ -1,0 +1,331 @@
+// RECOVERABLE, in two layers.
+//
+// The judges, called directly with commands that are already unwrapped: every verdict about
+// WHAT is lost, and every hardening of HOW git is asked.
+//
+// The whole hook, through the real entry script: the command shapes the dispatcher has to see
+// through. These lists are the acceptance for lib/recoverable/dispatch.mjs.
+
+import assert from "node:assert/strict";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { beforeEach, describe, it } from "node:test";
+
+import * as judges from "../lib/recoverable/judges.mjs";
+import { resolveWord } from "../lib/shell.mjs";
+import { decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
+import { gitIn, makeTree } from "./helpers/repo.mjs";
+
+let tree;
+beforeEach(() => {
+  tree = makeTree();
+});
+
+const ctx = (agentId = "", before = []) => ({
+  base: tree,
+  agentId,
+  before,
+  resolve: (word) => resolveWord(word, { cwd: tree }),
+});
+const words = (text) => text.split(" ");
+
+describe("judges: what a delete would lose", () => {
+  it("asks on the main thread, naming the untracked victims", async () => {
+    const v = await judges.rm(words("rm -rf wip"), ctx());
+    assert.equal(v.decision, "ask");
+    assert.match(v.reason, /wip\/deep\/plate\.png, wip\/notes\.md \(2 paths, untracked or edited/);
+  });
+
+  it("denies a subagent and says whose work it is", async () => {
+    const v = await judges.rm(words("rm -rf wip"), ctx("agent-1"));
+    assert.equal(v.decision, "deny");
+    assert.match(v.reason, /not yours/);
+    assert.match(v.reason, /belongs to the main session/);
+  });
+
+  for (const cmd of ["rm -r wip", "rm -rf wip/", "rm -rf ./wip/deep", "rm --recursive --force wip", "rm -rf wip/*", "rm -rf src"]) {
+    it(`loses work: ${cmd}`, async () => {
+      assert.equal((await judges.rm(words(cmd), ctx()))?.decision, "ask");
+    });
+  }
+
+  for (const cmd of ["rm -rf build", "rm -rf node_modules", "rm -rf cleandir", "rm -rf does-not-exist", "rm -f wip/notes.md"]) {
+    it(`loses nothing git cannot return: ${cmd}`, async () => {
+      assert.equal(await judges.rm(words(cmd), ctx()), null);
+    });
+  }
+
+  it("judges a single-file delete when a subagent makes it", async () => {
+    assert.equal((await judges.rm(words("rm -f wip/notes.md"), ctx("agent-1")))?.decision, "deny");
+  });
+
+  it("judges where it runs when a target cannot be read", async () => {
+    const v = await judges.rm(["rm", "-rf", "$UNSET_ANYWHERE_X/wip"], ctx());
+    assert.equal(v?.decision, "ask");
+    assert.match(v.reason, /a target this guard cannot read/);
+  });
+
+  it("says nothing outside a repository", async () => {
+    const outside = join(tree, "..", "loose");
+    mkdirSync(join(outside, "d"), { recursive: true });
+    writeFileSync(join(outside, "d", "f"), "x");
+    assert.equal(await judges.rm(["rm", "-rf", join(outside, "d")], ctx()), null);
+  });
+});
+
+describe("judges: find", () => {
+  for (const cmd of ["find wip -delete", "find . -name notes.md -delete", "find wip -type f -exec rm {} +"]) {
+    it(`loses work: ${cmd}`, async () => {
+      assert.equal((await judges.find(words(cmd), ctx()))?.decision, "ask");
+    });
+  }
+
+  for (const cmd of ["find . -name *.pyc -delete", "find . -name __pycache__ -type d -exec rm -rf {} +", "find wip -name *.md"]) {
+    it(`loses nothing: ${cmd}`, async () => {
+      assert.equal(await judges.find(words(cmd), ctx()), null);
+    });
+  }
+
+  it("dry-runs through the system find, never a `find` in the working directory", async () => {
+    const decoy = join(tree, "find");
+    writeFileSync(decoy, `#!/bin/sh\necho ran > "${tree}/decoy-ran"\n`);
+    chmodSync(decoy, 0o755);
+    await judges.find(["./find", "wip", "-delete"], ctx());
+    assert.equal(existsSync(join(tree, "decoy-ran")), false);
+  });
+
+  it("stays quiet on a sweep far larger than any cap one would guess", async () => {
+    const cache = join(tree, "src", "__pycache__");
+    for (let i = 0; i < 6000; i += 1) writeFileSync(join(cache, `m${i}.cpython-312.pyc`), "");
+    assert.equal(await judges.find(words("find . -name *.pyc -delete"), ctx()), null);
+    assert.equal((await judges.find(words("find . -delete"), ctx()))?.decision, "ask");
+  });
+});
+
+describe("judges: xargs-fed rm", () => {
+  it("dry-runs a printing find feeder exactly as written", async () => {
+    assert.equal((await judges.pipeFedRm(["rm", "-rf"], { kind: "find", argv: words("find . -name wip") }, ctx()))?.decision, "ask");
+    assert.equal(await judges.pipeFedRm(["rm", "-f"], { kind: "find", argv: words("find . -name *.pyc") }, ctx()), null);
+  });
+
+  it("reads the operands from an input file", async () => {
+    assert.equal((await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "list.txt" }, ctx()))?.decision, "ask");
+  });
+
+  it("judges where it runs when the feeder cannot be read", async () => {
+    const v = await judges.pipeFedRm(["rm", "-rf"], { kind: "unknown" }, ctx());
+    assert.match(v.reason, /its input cannot be read/);
+  });
+});
+
+describe("judges: git", () => {
+  const loud = [
+    "git restore src/mod.py",
+    "git restore .",
+    "git checkout .",
+    "git checkout -- src/mod.py",
+    "git checkout src/mod.py",
+    "git checkout -f",
+    "git clean -f",
+    "git clean -fd",
+    "git clean -fdx wip",
+    "git -C . clean -f",
+    "git switch --discard-changes main",
+    "git switch -f main",
+    "git checkout-index -f -a",
+    "git checkout-index --force src/mod.py",
+    "git rm -f src/mod.py",
+    "git rm -rf src",
+    "git reset --hard",
+    "git reset --hard HEAD~0",
+  ];
+  for (const cmd of loud) {
+    it(`loses work: ${cmd}`, async () => {
+      assert.equal((await judges.git(words(cmd), ctx()))?.decision, "ask");
+      assert.equal((await judges.git(words(cmd), ctx("agent-1")))?.decision, "deny");
+    });
+  }
+
+  const quiet = [
+    "git restore --staged src/mod.py",
+    "git restore tracked_clean.txt",
+    "git checkout -- tracked_clean.txt",
+    "git checkout -b some-branch",
+    "git switch -c other",
+    "git clean -n",
+    "git clean -nfd",
+    "git clean --dry-run -fd wip",
+    "git clean -f cleandir",
+    "git clean -fX",
+    "git checkout-index -a",
+    "git rm --cached src/mod.py",
+    "git rm src/mod.py",
+    "git stash list",
+    "git stash push -u",
+    "git stash drop",
+    "git status --short",
+  ];
+  for (const cmd of quiet) {
+    it(`loses nothing: ${cmd}`, async () => {
+      assert.equal(await judges.git(words(cmd), ctx()), null);
+    });
+  }
+
+  it("treats a staged edit as safe from `checkout -- f`, which restores from the index", async () => {
+    gitIn(tree, "add", "src/mod.py");
+    assert.equal(await judges.git(words("git checkout -- src/mod.py"), ctx()), null);
+    assert.equal((await judges.git(words("git checkout HEAD -- src/mod.py"), ctx()))?.decision, "ask");
+  });
+
+  it("asks before dropping a stash that holds something", async () => {
+    gitIn(tree, "stash", "push", "-u", "-q");
+    assert.equal((await judges.git(words("git stash drop"), ctx()))?.decision, "ask");
+    assert.equal((await judges.git(words("git stash clear"), ctx("agent-1")))?.decision, "deny");
+  });
+
+  it("asks when the same command stashes first and then drops", async () => {
+    const before = [words("git stash -u")];
+    assert.equal((await judges.git(words("git stash drop"), ctx("", before)))?.decision, "ask");
+  });
+});
+
+describe("judges: asking git without running the repository's programs", () => {
+  it("never executes core.fsmonitor", async () => {
+    const trap = join(tree, "..", "fsmon.sh");
+    writeFileSync(trap, `#!/bin/sh\necho ran > "${tree}/../fsmonitor-ran"\n`);
+    chmodSync(trap, 0o755);
+    gitIn(tree, "config", "core.fsmonitor", trap);
+    await judges.rm(words("rm -rf wip"), ctx());
+    await judges.git(words("git checkout -- src/mod.py"), ctx());
+    assert.equal(existsSync(join(tree, "..", "fsmonitor-ran")), false);
+  });
+
+  it("never executes a clean filter selected by .gitattributes", async () => {
+    writeFileSync(join(tree, ".gitattributes"), "*.py filter=evil\n");
+    gitIn(tree, "config", "filter.evil.clean", `sh -c 'echo ran >> "${tree}/../filter-ran"; cat'`);
+    // Same size as the committed "x = 1\n", so git cannot tell from stat alone and must hash
+    // the file, which is when it runs a clean filter. A size change would never exercise it.
+    writeFileSync(join(tree, "src", "mod.py"), "x = 9\n");
+    const v = await judges.git(words("git checkout -- src/mod.py"), ctx());
+    assert.equal(v?.decision, "ask", "the edit must still be seen");
+    assert.equal(existsSync(join(tree, "..", "filter-ran")), false);
+  });
+
+  it("raises ProbeFailed, never allows, when git cannot answer inside a repository", async () => {
+    writeFileSync(join(tree, ".git", "index"), "this is not an index");
+    await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
+  });
+});
+
+// ─── The whole hook: the shapes the dispatcher must see through ─────────────────────────
+
+async function hook(command, { agent = false, cwd = tree } = {}) {
+  const payload = {
+    session_id: "test",
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command },
+    cwd,
+    ...(agent ? { agent_id: "agent-1", agent_type: "general-purpose" } : {}),
+  };
+  const result = await runHook("recoverable", payload, { cwd });
+  assert.equal(result.code, 0, result.stderr);
+  return { decision: decisionOf(result.answer), reason: reasonOf(result.answer) };
+}
+
+const LOUD = [
+  "rm -rf wip",
+  "sh -c 'rm -rf wip'",
+  "find $(echo wip) -delete",
+  "git checkout -- src/mod.py",
+  "cd wip && rm -rf deep",
+  // Verifier round 2 on the fleet guard: every one of these walked past a regex segmenter.
+  "( rm -rf wip )",
+  "(rm -rf wip)",
+  "find wip -exec env rm -rf {} +",
+  "find wip -exec busybox rm -rf {} +",
+  "find wip -exec sudo rm -rf {} ;",
+  "find wip -type f -exec xargs rm {} +",
+  "echo wip | xargs -I{} rm -rf {}",
+  "echo wip | xargs -I % rm -rf %",
+  "echo wip | xargs -i rm -rf {}",
+  "git ls-files --others | xargs -I{} rm -f {}",
+  "xargs rm -rf < list.txt",
+  "xargs -a list.txt rm -rf",
+  "if true; then rm -rf wip; fi",
+  "for f in wip; do rm -rf $f; done",
+  "while true; do rm -rf wip; break; done",
+  "true && { rm -rf wip; }",
+  "! rm -rf wip",
+  "time rm -rf wip",
+  "eval 'rm -rf wip'",
+  "echo $(rm -rf wip)",
+  "(cd /tmp && true); rm -rf wip",
+  "S=build; S=wip; rm -rf $S",
+  "rm -rf $S; S=build",
+  'for f in notes.md; do rm -rf "wip/$f"; done',
+  "bash <<'EOF'\nrm -rf wip\nEOF",
+  "git switch --discard-changes -c other",
+  "git switch -f -c other",
+  "git checkout-index -f -a",
+  "git rm -f src/mod.py",
+  "git rm -rf src",
+];
+
+const QUIET = [
+  "ls -la",
+  "rm -rf build",
+  "rm -f wip/notes.md",
+  'find . -name "*.pyc" -delete',
+  'find . -name "*.pyc" -print0 | xargs -0 rm -f',
+  "git status --short",
+  'echo "rm -rf wip"',
+  'git commit -m "find wip -delete"',
+  "command -v rm",
+  "type rm",
+  "which rm find git",
+  "man rm",
+  "cat <<'EOF'\nrm -rf wip\nfind wip -delete\nEOF",
+  "python3 - <<'PY'\nimport shutil\n# rm -rf wip\nPY",
+  'grep -rn "rm -rf" .',
+  "((rm -rf wip))",
+  "S=wip; S=build; rm -rf $S",
+  "rm -rf $(mktemp -d)",
+  "git switch -c other",
+  "git rm --cached src/mod.py",
+  "echo done > wip/notes.md.bak",
+];
+
+// A broken hook fails closed and asks on EVERYTHING, which would pass the loud list for the
+// wrong reason. So each loud verdict must also come from a judge ("RECOVERABLE: …"), and the
+// quiet list below is the half that no broken hook can pass.
+const FROM_A_JUDGE = /^RECOVERABLE: /;
+
+describe("the hook: loud shapes ask the main thread and are denied to a subagent", () => {
+  for (const command of LOUD) {
+    it(JSON.stringify(command), async () => {
+      const main = await hook(command);
+      const sub = await hook(command, { agent: true });
+      assert.equal(main.decision, "ask", command);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.equal(sub.decision, "deny", command);
+      assert.match(sub.reason, FROM_A_JUDGE, sub.reason);
+    });
+  }
+
+  it("agrees on relative, cd-resolved and absolute spellings", async () => {
+    const parent = join(tree, "..");
+    assert.equal((await hook("rm -rf wip")).decision, "ask");
+    assert.equal((await hook(`cd ${tree} && rm -rf wip`, { cwd: parent })).decision, "ask");
+    assert.equal((await hook(`rm -rf ${tree}/wip`, { cwd: parent })).decision, "ask");
+  });
+});
+
+describe("the hook: quiet shapes stay silent in a dirty tree", () => {
+  for (const command of QUIET) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+});
