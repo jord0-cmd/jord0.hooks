@@ -7,7 +7,8 @@
 // through. These lists are the acceptance for lib/recoverable/dispatch.mjs.
 
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
 
@@ -209,6 +210,47 @@ describe("judges: asking git without running the repository's programs", () => {
     const v = await judges.git(words("git checkout -- src/mod.py"), ctx());
     assert.equal(v?.decision, "ask", "the edit must still be seen");
     assert.equal(existsSync(join(tree, "..", "filter-ran")), false);
+  });
+
+  it("carries every pin on git's command line, where even git 2.30 honours it", async () => {
+    // GIT_CONFIG_COUNT arrived in git 2.31, and git 2.30 was driven ignoring it. A shim ahead
+    // of the real git records every call's arguments.
+    const realGit = execFileSync("sh", ["-c", "command -v git"]).toString().trim();
+    const shimDir = join(tree, "..", "shim");
+    const log = join(tree, "..", "git-calls.log");
+    mkdirSync(shimDir);
+    writeFileSync(join(shimDir, "git"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${log}"\nexec "${realGit}" "$@"\n`);
+    chmodSync(join(shimDir, "git"), 0o755);
+    const saved = process.env.PATH;
+    process.env.PATH = `${shimDir}:${saved}`;
+    try {
+      await judges.git(words("git checkout -- src/mod.py"), ctx());
+      await judges.rm(words("rm -rf wip"), ctx());
+    } finally {
+      process.env.PATH = saved;
+    }
+    const calls = readFileSync(log, "utf8").trim().split("\n").filter((c) => !/^version\b/.test(c));
+    assert.ok(calls.length >= 3, calls.join("\n"));
+    for (const call of calls) {
+      assert.match(call, /-c core\.fsmonitor= /, call);
+      assert.match(call, /-c log\.showSignature=false /, call);
+    }
+  });
+
+  it("keeps working when a blanked filter is marked required", async () => {
+    writeFileSync(join(tree, ".gitattributes"), "*.py filter=lfsish\n");
+    gitIn(tree, "config", "filter.lfsish.clean", `sh -c 'echo ran >> "${tree}/../filter-ran"; cat'`);
+    gitIn(tree, "config", "filter.lfsish.required", "true");
+    writeFileSync(join(tree, "src", "mod.py"), "x = 9\n");
+    const v = await judges.git(words("git checkout -- src/mod.py"), ctx());
+    assert.equal(v?.decision, "ask");
+    assert.equal(existsSync(join(tree, "..", "filter-ran")), false);
+  });
+
+  it("raises ProbeFailed, never stays silent, when the repository's config is broken", async () => {
+    writeFileSync(join(tree, ".git", "config"), "[core\n\tthis is not config\n");
+    await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
+    await assert.rejects(judges.git(words("git checkout -- ."), ctx()), judges.ProbeFailed);
   });
 
   it("raises ProbeFailed, never allows, when git cannot answer inside a repository", async () => {

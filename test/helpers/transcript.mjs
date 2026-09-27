@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 let counter = 0;
 
-/** @typedef {{ tool: string, input: object, error?: boolean, output?: string } | { say: string } | { human: string }} Step */
+/** @typedef {{ tool: string, input: object, error?: boolean, output?: string, cwd?: string } | { say: string } | { human: string }} Step */
 
 /**
  * @param {Step[]} steps
@@ -30,6 +30,7 @@ export function transcript(steps) {
       lines.push({
         type: "assistant",
         isSidechain: false,
+        ...(step.cwd ? { cwd: step.cwd } : {}),
         message: { role: "assistant", content: [{ type: "tool_use", id, name: step.tool, input: step.input }] },
       });
       const output = step.output ?? (step.error ? "Exit code 1\n" : "ok");
