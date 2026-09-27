@@ -19,7 +19,7 @@ DONE-GATE catches those three. Not the subset. It sees that a test ran after the
 
 When Claude is about to stop, DONE-GATE reads the final message and then what the session did, in order:
 
-1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", and the like. A negated claim ("nothing is committed") does not count, and neither does a word inside backticks or quotes.
+1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", "everything's green", "all set", and the rest of a fixed list. A negated claim ("nothing is committed") does not count, and neither does a word inside backticks or quotes.
 2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. Markdown, text, images and CSV do not count, and neither do `.gitignore`, `.gitattributes`, `.editorconfig`, `CODEOWNERS` or a licence: nothing runs them. A `Dockerfile`, an `.env.example` and JSON do count. An edit to them changes what builds and runs.
 3. After the last such edit, did a test command run, and did it pass?
 
@@ -77,7 +77,7 @@ In a repository with no tests, it will ask every time you claim done after an ed
 - Edits made inside a subagent live in the subagent's transcript, not the main one.
 - A test run started in the background reports "running", not a result. It counts as run.
 - A run counts whatever it covered. One test file, unrelated to the edit, passes the gate.
-- Claims are recognised in English.
+- Claims come from that fixed list, in English. "The bug is gone" and "that should do it" are not on it, and pass unread.
 - A test run inside a command the grammar cannot parse is not seen. The feedback then says which command it could not read.
 
 Tests: `test/done-gate.test.mjs`.

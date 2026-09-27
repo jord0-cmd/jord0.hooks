@@ -306,6 +306,15 @@ describe("round 1b: DONE-GATE", () => {
     });
   }
 
+  it("hears contracted and everyday claims, and still not a negated or a questioning one", () => {
+    for (const text of ["Everything's green.", "Everything’s green.", "It’s working now.", "It works now.", "All set.", "Good to go."]) {
+      assert.notEqual(completionClaim(text), "", text);
+    }
+    for (const text of ["Check whether it works.", "Nothing is set up yet, so not good to go."]) {
+      assert.equal(completionClaim(text), "", text);
+    }
+  });
+
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);
