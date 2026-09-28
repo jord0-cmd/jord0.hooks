@@ -117,7 +117,7 @@ describe("judges: xargs-fed rm", () => {
 
   it("judges where it runs when the feeder cannot be read", async () => {
     const v = await judges.pipeFedRm(["rm", "-rf"], { kind: "unknown" }, ctx());
-    assert.match(v.reason, /its input cannot be read/);
+    assert.match(v.reason, /whose input this guard cannot read/);
   });
 });
 
@@ -335,12 +335,19 @@ describe("judges: round 1 of review", () => {
     assert.equal((await judges.git(words("git checkout -- ."), through))?.decision, "ask");
   });
 
-  it("judges where it runs when a git word cannot be read", async () => {
+  it("reads an unreadable pathspec as the whole tree after its flags, an unreadable repository where it runs", async () => {
+    // Round 2: an unreadable pathspec used to fall back before the flags were read, so
+    // `restore --staged` and `rm --cached` fed by xargs asked. Now the flags decide first, and
+    // the reason names what the command itself loses, not everything dirty where it runs.
     const v1 = await judges.git(["git", "checkout", "--", "$(git diff --name-only)"], ctx());
-    const v2 = await judges.git(["git", "-C", "$UNSET_ANYWHERE_X", "reset", "--hard"], ctx());
     assert.equal(v1?.decision, "ask");
+    assert.match(v1.reason, /^RECOVERABLE: `git checkout` would destroy .*src\/mod\.py/);
+    assert.doesNotMatch(v1.reason, /wip\//, "checkout from the index cannot touch untracked files");
+    assert.equal(await judges.git(["git", "restore", "--staged", "--", "$(git diff --name-only)"], ctx()), null);
+    assert.equal(await judges.git(["git", "rm", "--cached", "--", "$(git ls-files)"], ctx()), null);
+    const v2 = await judges.git(["git", "-C", "$UNSET_ANYWHERE_X", "reset", "--hard"], ctx());
     assert.equal(v2?.decision, "ask");
-    assert.match(v1.reason, /a word this guard cannot read/);
+    assert.match(v2.reason, /in a repository this guard cannot read/);
   });
 
   it("judges a delete of several files on the main thread", async () => {
@@ -637,8 +644,8 @@ const LOUD = [
   "rm -rf $S; S=build",
   'for f in notes.md; do rm -rf "wip/$f"; done',
   "bash <<'EOF'\nrm -rf wip\nEOF",
-  "git switch --discard-changes -c other",
-  "git switch -f -c other",
+  "git switch --discard-changes main", // driven: discards the edit even to the branch it is on
+  "git switch -f main",
   "git checkout-index -f -a",
   "git rm -f src/mod.py",
   "git rm -rf src",
@@ -687,6 +694,8 @@ const QUIET = [
   "S=wip; S=build; rm -rf $S",
   "rm -rf $(mktemp -d)",
   "git switch -c other",
+  "git switch -f -c other", // driven on git 2.47: a branch made at HEAD keeps the edit
+  "git switch --discard-changes -c other",
   "git rm --cached src/mod.py",
   "echo done > wip/notes.md.bak",
   "cat <<'EOF'\n$(rm -rf wip)\nEOF",
@@ -710,6 +719,32 @@ const QUIET = [
 // quiet list below is the half that no broken hook can pass.
 const FROM_A_JUDGE = /^RECOVERABLE: /;
 
+// And a judge's fallback (judging everything dirty where the command runs) names the right files
+// too, on this fixture, for a command that really deletes wip. So each loud command also says
+// what its reason must name and must NOT name: a delete of wip names wip/notes.md and never
+// src/mod.py, which only the fallback would mention. A shape that is SUPPOSED to fall back says so.
+const WIP = { names: /wip\/notes\.md/, not: /src\/mod\.py/ };
+const EDIT = { names: /src\/mod\.py/, not: /wip\// };
+const DEEP = { names: /wip\/deep\/plate\.png/, not: /notes\.md|src\/mod\.py/ };
+const FALLBACK = { names: /this guard cannot read|cannot fully parse|more wrappers than this guard follows/ };
+const EXPECT = new Map([
+  ["find $(echo wip) -delete", FALLBACK],
+  ["git checkout -- src/mod.py", EDIT],
+  ["cd wip && rm -rf deep", DEEP],
+  ["git ls-files --others | xargs -I{} rm -f {}", FALLBACK],
+  ["rm -rf $S; S=build", FALLBACK],
+  ['for f in notes.md; do rm -rf "wip/$f"; done', { names: /wip\/notes\.md/, not: /plate|src\/mod\.py/ }],
+  ["git switch --discard-changes main", EDIT],
+  ["git switch -f main", EDIT],
+  ["git checkout-index -f -a", EDIT],
+  ["git rm -f src/mod.py", EDIT],
+  ["git rm -rf src", EDIT],
+  ["cat <<EOF; rm -rf wip\nbody\nEOF", FALLBACK],
+  ["cd .. && git --git-dir=tree/.git --work-tree=tree checkout -- .", EDIT],
+  ["builtin cd wip && rm -rf deep", DEEP],
+  ["env -C wip rm -rf deep", DEEP],
+]);
+
 describe("the hook: loud shapes ask the main thread and are denied to a subagent", () => {
   for (const command of LOUD) {
     it(JSON.stringify(command), async () => {
@@ -717,6 +752,9 @@ describe("the hook: loud shapes ask the main thread and are denied to a subagent
       const sub = await hook(command, { agent: true });
       assert.equal(main.decision, "ask", command);
       assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      const { names, not } = EXPECT.get(command) ?? WIP;
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
       assert.equal(sub.decision, "deny", command);
       assert.match(sub.reason, FROM_A_JUDGE, sub.reason);
     });
@@ -743,12 +781,13 @@ describe("the hook: shapes a fresh-context review turned up", () => {
     "sh -c 'cat <<EOF; rm -rf wip\nbody\nEOF'",         // the unparsed span is in the nested payload
     "command rm -v -rf wip",                              // -v is rm's flag, not `command`'s lookup
     "exec rm -rf wip",
-    "eval eval eval eval eval eval rm -rf wip",           // past the recursion cap: judged, not dropped
+    "eval eval eval eval eval eval rm -rf wip",           // nested evals are followed to the rm
   ];
   for (const command of asks) {
     it(JSON.stringify(command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", command);
+      if (command.startsWith("eval")) assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, main.reason);
       const sub = await hook(command, { agent: true });
       assert.equal(sub.decision, "deny", command);
     });
@@ -767,4 +806,122 @@ describe("the hook: quiet shapes stay silent in a dirty tree", () => {
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
+});
+
+// ── round 2 of review (a bench of five, Opus 5 alone, one Fable pass) ──────────────────────────
+// Every shape below was driven against the hook before its fix: a silent loss, or a false alarm.
+
+const LOUD_ROUND_2 = [
+  // Wrappers the one shared table now sees through.
+  ["env -S 'rm -rf wip'", WIP],
+  ["env --split-string='rm -rf wip'", WIP],
+  ["taskset 0x3 rm -rf wip", WIP],
+  ["/usr/bin/time -o /dev/null rm -rf wip", WIP],
+  ["env -u FOO -C wip rm -rf deep", DEEP],
+  ["sudo env -C wip rm -rf deep", DEEP],
+  [`${"nice ".repeat(13)}rm -rf wip`, FALLBACK],
+  // Shells fed a script every way the text shows it.
+  ["bash --rcfile /dev/null -c 'rm -rf wip'", WIP],
+  ["echo 'rm -rf wip' | bash -s -- x", WIP],
+  ["echo -e 'rm -rf wip\\n' | bash", WIP],
+  ["cat <<'EOF' | bash\nrm -rf wip\nEOF", WIP],
+  ["cat <<'EOF' | tee /dev/null | sh\nrm -rf wip\nEOF", WIP],
+  ["bash < <(echo 'rm -rf wip')", WIP],
+  ["trap 'rm -rf wip' EXIT", WIP],
+  ["f() { rm -rf wip; }; f", WIP],
+  ["S=wip sh -c 'rm -rf $S'", WIP],
+  // The directory and the variables, followed the way the shell follows them.
+  ["eval 'cd wip'; rm -rf deep", DEEP],
+  ["f() { cd wip; }; f; rm -rf deep", DEEP],
+  ["cd /tmp | cat; rm -rf wip", WIP],
+  ["cd /tmp & rm -rf wip", WIP],
+  ["false && cd /tmp; rm -rf wip", WIP],
+  ["if false; then cd /tmp; fi; rm -rf wip", WIP],
+  ["cd cleandir && cd - && rm -rf wip", WIP],
+  ["pushd cleandir && popd && rm -rf wip", WIP],
+  ["S=build; unset S; rm -rf wip$S", WIP],
+  ["cd nosuchdir || rm -rf wip", WIP], // the rm runs exactly when the cd FAILED, so here
+  ["cd nosuchdir; rm -rf wip", WIP], // the cd fails, the shell stays, the rm runs here
+  // The one-file exemption counts files, and counts them across the call.
+  ["rm wip/*.md", { names: /wip\/notes\.md/ }],
+  ["rm list.txt; rm wip/notes.md", { names: /list\.txt.*wip\/notes\.md/ }],
+  ["for f in list.txt wip/notes.md; do rm $f; done", { names: /list\.txt.*wip\/notes\.md/ }],
+  ["rm {list.txt,wip/notes.md}", { names: /list\.txt.*wip\/notes\.md/ }],
+  ["DIRS='wip src'; rm -rf $DIRS", { names: /src\/mod\.py.*wip\// }],
+  // A find or xargs feeding a shell or git.
+  ["find wip -type f -exec sh -c 'rm \"$0\"' {} \;", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["find wip -type f | xargs -I{} sh -c 'rm \"{}\"'", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["find wip -type f -print0 | xargs -0 sh -c 'rm \"$@\"' _", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["git diff --name-only | xargs git checkout --", EDIT],
+  ["find src -name '*.py' -exec git checkout -- {} +", EDIT],
+  ["echo wip | xargs rm -rf", WIP],
+  ["xargs rm -rf <<< wip", WIP],
+  // Git, as git behaves.
+  ["git clean -f wip", WIP],
+  ["git clean -fde build", WIP],
+  ["git read-tree -u --reset HEAD", EDIT],
+  ["git add -A && git reset --hard", { names: /src\/mod\.py.*wip\/|wip\/.*src\/mod\.py/ }],
+  // One reason names every loss in the call.
+  ["rm -rf wip && git reset --hard", { names: /`rm`: .*wip\/notes\.md.*`git reset --hard`: .*src\/mod\.py/ }],
+];
+
+const QUIET_ROUND_2 = [
+  "git clean -fd does-not-exist",
+  "git checkout-index -f -a --prefix=/tmp/export/",
+  "git add -A && rm -rf wip", // the index holds it: `git restore` brings it back
+  "git stash push -u -q && rm -rf wip", // the stash holds it
+  "eval eval eval eval eval eval echo hi",
+  "rm -rf .",
+  "rm -rf wip/.",
+  "rm -rf 'wi*'", // a quoted pattern is a literal name, and no file has it
+  'rm -rf "build[z-a]"', // an invalid bracket is literal too, not a crash
+  "rm -f .git/refs/heads/main.lock",
+  "cd nosuchdir && rm -rf *", // the cd fails, so the rm never runs
+  "mkdir -p scratch; cd scratch; rm -rf *", // the mkdir made it: the cd succeeds
+  "echo build | xargs rm -rf",
+  'for d in build node_modules; do rm -rf "$d"; done',
+];
+
+describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
+  for (const [command, { names, not }] of LOUD_ROUND_2) {
+    it(JSON.stringify(command), async () => {
+      const main = await hook(command);
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
+      assert.equal((await hook(command, { agent: true })).decision, "deny", command);
+    });
+  }
+});
+
+describe("the hook: round 2 false alarms stay silent", () => {
+  for (const command of QUIET_ROUND_2) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+
+  it("never counts a clean repository's commits for a target it cannot read", async () => {
+    gitIn(tree, "stash", "push", "-u", "-q"); // nothing dirty left; one commit on no remote
+    for (const command of ["rm -rf $UNSET_X/scratch", "ls | xargs rm -rf", "git checkout -- $(git diff --name-only)"]) {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    }
+  });
+
+  it("knows `git clean -f` without -d leaves an untracked directory alone", async () => {
+    gitIn(tree, "add", "list.txt"); // the only untracked FILE; what is left untracked is wip/, a directory
+    assert.equal((await hook("git clean -f")).decision, "silent");
+    assert.match((await hook("git clean -fd")).reason, /wip\/notes\.md/);
+  });
+
+  it("judges a delete over a thousand ignored directories in well under its budget", async () => {
+    for (let i = 0; i < 1500; i += 1) mkdirSync(join(tree, "node_modules", `pkg${i}`), { recursive: true });
+    const started = Date.now();
+    const { decision } = await hook("rm -rf node_modules/*");
+    assert.equal(decision, "silent");
+    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms`);
+  });
 });
