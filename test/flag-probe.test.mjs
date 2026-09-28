@@ -305,3 +305,55 @@ describe("round 1 of review: a malformed payload is not silence", () => {
     assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "silent");
   });
 });
+
+describe("round 2 of review", () => {
+  before(() => {
+    const script = (name, body) => {
+      writeFileSync(join(dir, name), body);
+      chmodSync(join(dir, name), 0o755);
+    };
+    // getopts "h:" takes a host after -h; it handles neither -h as help nor --help.
+    script("getopts-host.sh", '#!/bin/sh\nwhile getopts "h:p:" opt; do case $opt in h) HOST=$OPTARG ;; esac; done\necho deploy to $HOST\n');
+    script("getopts-help.sh", '#!/bin/sh\nwhile getopts "hv" opt; do case $opt in h) echo usage; exit 0 ;; esac; done\necho ran\n');
+    // A usage text that lists the flags, and a message that mentions one, handle nothing.
+    script("usage-heredoc.sh", "#!/bin/sh\ncat <<EOF\nOptions:\n  -h|--help) show this\nEOF\necho ran\n");
+    script("message.py", "print('--help', 'is not supported, running anyway')\n");
+  });
+
+  for (const command of [
+    "env -S './deploy.sh --help'",
+    "doas ./deploy.sh --help",
+    "setsid ./deploy.sh --help",
+    "flock lock ./deploy.sh --help",
+    "taskset -c 0 ./deploy.sh --help",
+    "chronic ./deploy.sh --help",
+    "cd -P sub && ./inner.sh --help",
+    "./getopts-host.sh -h",
+    "./getopts-help.sh --help",
+    "./usage-heredoc.sh --help",
+    "python3 message.py --help",
+    "cat deploy.sh > /dev/null; ./deploy.sh --help",
+    "grep -c . deploy.sh; ./deploy.sh --help",
+    "sed -i 's/a/b/' deploy.sh; ./deploy.sh --help",
+    "false && cat deploy.sh; ./deploy.sh --help",
+    "S=./deploy.sh; (S=./helpful.sh); $S --help",
+  ]) {
+    it(`denies ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "deny");
+    });
+  }
+
+  it("asks where `cd -` leads, since the directory it returns to is not known", async () => {
+    assert.notEqual((await decide("cd - ; ./deploy.sh --help")).decision, "silent");
+  });
+
+  for (const command of ["./getopts-help.sh -h", "cat deploy.sh && ./deploy.sh --help"]) {
+    it(`stays silent for ${command}`, async () => {
+      assert.equal((await decide(command)).decision, "silent");
+    });
+  }
+
+  it("does not ask about --help mentioned in quoted prose of a command it cannot parse", async () => {
+    assert.equal((await decide('git commit -m "document --help" && cat <<EOF; echo\nbody\nEOF')).decision, "silent");
+  });
+});
