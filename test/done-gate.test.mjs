@@ -71,8 +71,14 @@ describe("DONE-GATE lets the stop through", () => {
   });
 
   it("when pipefail makes the piped run's exit status real", async () => {
-    const steps = [edit("/w/a.py"), bash("set -o pipefail; pytest | tail -1", { output: "0 failed" })];
-    assert.equal(await verdict(stop(steps, "Done.")), null);
+    // Round 2 (Fable): with pipefail the pipeline's status IS pytest's, so a failure is reported
+    // by its exit code. Before, the pipe rule was dead code and this read as a hidden status.
+    const failing = [edit("/w/a.py"), bash("set -o pipefail; pytest | tail -1", { output: "Exit code 1\n1 failed", error: true })];
+    const feedback = (await verdict(stop(failing, "Done.")))?.feedback ?? "";
+    assert.match(feedback, /failed: `set -o pipefail; pytest \| tail -1` \(exit code 1\)/);
+    assert.doesNotMatch(feedback, /hid the exit status/);
+    const passing = [edit("/w/a.py"), bash("set -o pipefail; pytest | tail -1", { output: "3 passed" })];
+    assert.equal(await verdict(stop(passing, "Done.")), null);
   });
 
   it("when the claim is negated", async () => {
@@ -215,8 +221,10 @@ describe("round 1 of review: DONE-GATE", () => {
   }
 
   it("does not take pipefail from a commit message", async () => {
-    const steps = [edit("/w/m.py"), bash('git commit -qm "add pipefail note" && pytest | tail -1', { output: "1 failed, 3 passed in 0.1s" })];
-    assert.match((await verdict(stop(steps, "Done.")))?.feedback ?? "", /1 failed, 3 passed/);
+    // Failing, with an exit status: pipefail read from the message would report "exit code 1";
+    // the piped run's own status is hidden, so the tally is what speaks.
+    const steps = [edit("/w/m.py"), bash('git commit -qm "add pipefail note" && pytest | tail -1', { output: "Exit code 1\n1 failed, 3 passed in 0.1s", error: true })];
+    assert.match((await verdict(stop(steps, "Done.")))?.feedback ?? "", /“1 failed, 3 passed in 0\.1s”, and the command hid the exit status/);
   });
 
   it("does not read a number in a log line as a failure tally", async () => {
@@ -336,14 +344,65 @@ describe("round 1b: DONE-GATE", () => {
     });
   }
 
-  for (const command of ["npm test 2>&1 | tee test-output", "pytest -q > report.json", "echo hi > notes.md", "git apply --check fix.patch"]) {
+  // Each write comes AFTER a passing run, so reading it as an edit leaves an edit with no test
+  // after it, and the stop is refused. (With the write in the same call as the run, as this test
+  // once was, the run cleared it whatever it was called: round 2, Opus 5.)
+  for (const command of ["cat out | tee test-output", "cat out > report.json", "echo hi > notes.md", "git apply --check fix.patch", "git am --abort"]) {
     it(`does not count an output or a dry run as an edit: ${command}`, async () => {
-      assert.equal(await verdict(stop([bash(command, { output: "3 passed" })], "Done.")), null);
+      const steps = [edit("/w/a.py"), bash("pytest -q", { output: "3 passed" }), bash(command)];
+      assert.equal(await verdict(stop(steps, "Done.")), null);
     });
   }
 
   it("sees a test run behind bash's `time` reserved word", async () => {
     const steps = [edit("/w/a.py"), bash("time { pytest -q; }", { output: "3 passed" })];
     assert.equal(await verdict(stop(steps, "Done, all tests pass.")), null);
+  });
+});
+
+describe("DONE-GATE, round 2 of review", () => {
+  const refused = async (steps, final = "Done.") => (await verdict(stop(steps, final)))?.feedback ?? "";
+
+  it("reads sed's script as a script, not a file", async () => {
+    assert.equal(await refused([bash("sed -i 's/1.0/2.0/' README.md")]), "");
+    assert.match(await refused([bash("sed -i 's/a/b/' app.py b.md")]), /app\.py was edited/);
+    assert.equal(await refused([bash("perl -Mstrict -ne 'print' app.py")]), "", "-M is a module, not -i");
+    assert.match(await refused([bash("perl -pi -e 's/a/b/' app.py")]), /app\.py was edited/);
+  });
+
+  it("counts a dependency list or a build script with a .txt name as code", async () => {
+    assert.match(await refused([edit("/w/requirements.txt")]), /requirements\.txt was edited/);
+    assert.match(await refused([edit("/w/CMakeLists.txt")]), /CMakeLists\.txt was edited/);
+  });
+
+  for (const command of ["pytest $(cat list.txt)", "pytest && echo ok"]) {
+    it(`gives a test its own exit status when nothing after it can run on a failure: ${command}`, async () => {
+      const feedback = await refused([edit("/w/a.py"), bash(command, { output: "Exit code 1\n1 failed", error: true })]);
+      assert.match(feedback, /\(exit code 1\)/);
+      assert.doesNotMatch(feedback, /hid the exit status/);
+    });
+  }
+
+  for (const command of ["bash -c 'pytest -q'", "docker exec app bash -c 'npm test'", "env -S 'pytest -q'", "/usr/bin/time -o t.txt pytest", "pixi run test", "deno task test", "pdm run test"]) {
+    it(`sees a test run: ${command}`, async () => {
+      assert.equal(await refused([edit("/w/a.py"), bash(command, { output: "3 passed" })]), "");
+    });
+  }
+
+  for (const command of ["pytest --collect-only", "cargo test --no-run", "mvn install -DskipTests", "gradle build -x test", "make -n test", "node app.js --test"]) {
+    it(`does not count a run that tests nothing: ${command}`, async () => {
+      assert.match(await refused([edit("/w/a.py"), bash(command, { output: "ok" })]), /no test has run since/);
+    });
+  }
+
+  for (const final of ["The parser still needs to be fixed.", "This will be completed in the next step.", "Is it fixed?", "I committed nothing.", "Here is the loop:\n```\nfor f in x; do echo; done\n```"]) {
+    it(`hears no claim in: ${JSON.stringify(final)}`, async () => {
+      assert.equal(await refused([edit("/w/a.py")], final), "");
+    });
+  }
+
+  it("takes a plain admission, and not a sentence about something else", async () => {
+    assert.equal(await refused([edit("/w/a.py")], "Done. I haven't tested it."), "");
+    assert.match(await refused([edit("/w/a.py")], "Done. I could not run the migration."), /no test has run since/);
   });
 });

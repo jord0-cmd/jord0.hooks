@@ -19,8 +19,8 @@ DONE-GATE catches those three. Not the subset. It sees that a test ran after the
 
 When Claude is about to stop, DONE-GATE reads the final message and then what the session did, in order:
 
-1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", "everything's green", "all set", and the rest of a fixed list. A negated claim ("nothing is committed") does not count, and neither does a word inside backticks or quotes.
-2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. So is a source file written from the shell, `cat > app.py <<EOF` or `tee lib/a.ts`, and a patch applied with `git apply`, `git am` or `patch`. A shell write counts only into a source extension: `npm test | tee test-output` writes an output, not code. Markdown, text, images and CSV do not count, and neither do `.gitignore`, `.gitattributes`, `.editorconfig`, `CODEOWNERS` or a licence: nothing runs them. A `Dockerfile`, an `.env.example` and JSON do count. An edit to them changes what builds and runs.
+1. Does the final message claim completion? "Done", "fixed", "all tests pass", "shipped", "ready to merge", "everything's green", "all set", and the rest of a fixed list. A negated claim does not count, whether the negation comes first ("nothing is committed") or after ("I committed nothing"). Neither does work still to come ("the parser still needs to be fixed", "this will be completed next"), a question ("is it fixed?"), or a word inside backticks, quotes or a fenced code block.
+2. Was a code file edited? Edit, Write, MultiEdit, NotebookEdit, or `sed -i` and `perl -i` in Bash. The script of a `sed` or `perl` is not a file: `sed -i 's/1.0/2.0/' README.md` edits prose. So is a source file written from the shell, `cat > app.py <<EOF` or `tee lib/a.ts`, and a patch applied with `git apply`, `git am` or `patch`. A shell write counts only into a source extension: `npm test | tee test-output` writes an output, not code. Markdown, text, images and CSV do not count (except `requirements.txt`, `constraints.txt` and `CMakeLists.txt`, which a build reads), and neither do `.gitignore`, `.gitattributes`, `.editorconfig`, `CODEOWNERS` or a licence: nothing runs them. A `Dockerfile`, an `.env.example` and JSON do count. An edit to them changes what builds and runs.
 3. After the last such edit, did a test command run, and did it pass?
 
 It knows the test runners people use: pytest, `python -m pytest`, `python manage.py test`, tox, nox, jest, vitest, mocha, `node --test`, `deno test`, `cargo test` (toolchain too), `cargo nextest`, `go test`, `mvn clean test`, `gradle test`, `dotnet test`, rspec, `mix test`, `swift test`, ctest, phpunit, bats, `bazel test`, `sbt test`, `stack test`, `cabal test`, `meson test`, plus `npm test`, `npm run test:*`, `pnpm --filter x test`, `pnpm vitest run`, `make test` and `make -j 4 check`. It sees through `timeout`, `env`, `nice`, `uv run`, `poetry run`, `npx`, `bundle exec` and `docker compose run`. Anything else can be named in `JORD0_DONE_GATE_COMMANDS`.
@@ -29,7 +29,9 @@ It knows the test runners people use: pytest, `python -m pytest`, `python manage
 
 A Bash call exits with its last command's status. `pytest | tail -3` exits with `tail`'s, and `pytest; echo done` and `pytest || true` exit 0 however many tests failed.
 
-So when a test run is piped onward without `pipefail`, or followed by anything, DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status.
+So when a test run's exit status is not the call's (a later command still runs after the tests fail: anything after `;`, `||` or `&`, and a later stage of its pipeline unless `set -o pipefail` is on), DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status: `pytest && echo ok`, a piped run under `pipefail`, and `pytest $(cat list.txt)` all own theirs.
+
+A test run inside a shell counts (`bash -c 'pytest -q'`, `docker exec app sh -c 'npm test'`), and so does a project task run by `pixi run`, `pdm run`, `hatch run` or `deno task` when it is named `test`, `check`, `verify` or `ci`. A run that tests nothing does not: `pytest --collect-only`, `cargo test --no-run`, `mvn install -DskipTests`, `gradle build -x test`, `make -n test`, `node app.js --test`.
 
 The hidden status cuts both ways. In `pytest -q; git push`, a push that fails exits 1 after nine tests passed. With no failure line in the output, DONE-GATE does not blame the tests. It says the status belongs to a command after them, and asks for the test run's own result line.
 
@@ -62,7 +64,7 @@ And when the last run failed behind a pipe:
 ## When it lets the stop through
 
 - A test ran after the last edit and passed.
-- No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it. And no admission excuses a test run that failed.
+- No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it, and "I could not run the migration" is about something else; "I haven't tested it" is the whole. And no admission excuses a test run that failed.
 - `stop_hook_active` is true, which means Claude is already continuing because of a refusal. DONE-GATE refuses at most once per stop.
 - `JORD0_DONE_GATE=0` is set.
 - It cannot read the transcript, or the payload carries no final message. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.
