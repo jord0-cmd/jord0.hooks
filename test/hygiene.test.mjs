@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,11 +15,45 @@ const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT }).toString("utf8"
 const text = (file) => readFileSync(join(ROOT, file), "utf8");
 const TEXT_FILES = tracked.filter((f) => /\.(?:mjs|js|json|md|yml|yaml|css|html|txt)$|^LICENSE$|Dockerfile$|^\.gitignore$/.test(f) && f !== "package-lock.json");
 
-// Names and paths from the machines this was built on. None of them belongs in a public repo.
-// This list named the machines and the people this was built beside. It was taken out of the
-// history before the repository was published, because a readable list is the leak it exists to
-// stop; the test that replaced it keeps each word as a SHA-256 digest.
-const BANNED = [/\/home\/(?!tester\b)[a-z]\w*/, /\b192\.168\.\d+\.\d+/, /\.ts\.net\b/i];
+// Words from the machines and the people this was built beside. None belongs in a public repo, and
+// neither does a list of them: a readable list is the leak it exists to stop. So each word is kept
+// as a SHA-256 digest. Every word in a tracked file, and every two neighbouring words run together
+// (so a dotted address or an underscored name is caught whole), is lowercased with its digits
+// folded to "#" and hashed; a digest in this set is a leak. A digest cannot be read or searched
+// for, but anyone who already knows a word can confirm it. This keeps the words out of casual
+// reading and search results. It is not secrecy.
+const PRIVATE_WORDS = new Set([
+  "0930f017a7b49e0fe2177d2150c03e437f520fa42bf91f459f4cb87a299671f0",
+  "2fec25192a9ff014fc3ed2fd3b824ddbebe76a94a51a9e35e38a957731a83a3e",
+  "540d65804fe3af93b15e57b8f56a788e4d6d5be29cb7fd1e22539530a80d0b80",
+  "92a4d079f816921e64ac1af23d272eae3190f94a57603b08cac18605f8136193",
+  "a1abef611f2399049e141a55a46cc844641ba3c76c1dae917cb7bc1d0549c688",
+  "a885bd3d15a135670ccdfc0bb9921eb29c53e73a366008f9f047bd5c871b56cf",
+  "b25461a1cb2cc16680a7916a6bd131b5743114b5056603616742dc60bc7bc9d0",
+  "dae9acb1cd1776b0df960c0e8175fa65671dcb7699c727fbb6d57140f83c94f1",
+  "decde78e848fec751925e32fd825b9979b9281b4548c157d21449c4b2f37135e",
+  "ecc9bddb65dc44516ca3eae954eb6d06cbfe4c250cae103f68d5cf346a7cf703",
+]);
+
+// Shapes that are private whoever they name: a home directory, a LAN address, a tailnet host.
+const PRIVATE_SHAPES = [/\/home\/(?!tester\b)[a-z]\w*/, /\b192\.168\.\d+\.\d+/, /\.ts\.net\b/i];
+
+const digestOf = new Map();
+function isPrivateWord(word) {
+  if (!digestOf.has(word)) digestOf.set(word, PRIVATE_WORDS.has(createHash("sha256").update(word).digest("hex")));
+  return digestOf.get(word);
+}
+
+/** The private words and shapes in one line of text, as short labels (never the word itself). */
+function leaksIn(line) {
+  const found = PRIVATE_SHAPES.filter((re) => re.test(line)).map(String);
+  const words = line.toLowerCase().replace(/[0-9]/g, "#").split(/[^a-z#]+/).filter(Boolean);
+  words.forEach((word, i) => {
+    if (isPrivateWord(word)) found.push(`private word ${i + 1}`);
+    else if (i > 0 && isPrivateWord(words[i - 1] + word)) found.push(`private words ${i}-${i + 1}`);
+  });
+  return found;
+}
 
 describe("nothing private leaks", () => {
   it("no tracked file names a private machine, path, or person", () => {
@@ -27,7 +62,7 @@ describe("nothing private leaks", () => {
       text(file)
         .split("\n")
         .forEach((line, i) => {
-          for (const re of BANNED) if (re.test(line)) hits.push(`${file}:${i + 1}  ${re}  ${line.trim().slice(0, 100)}`);
+          for (const what of leaksIn(line)) hits.push(`${file}:${i + 1}  ${what}`);
         });
     }
     assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
