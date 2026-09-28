@@ -185,9 +185,10 @@ describe("a stray error after the answer", () => {
     import { ${entry} } from ${JSON.stringify(runner)};
     await ${entry}("TEST", async () => ({
       judge: async () => {
-        Promise.reject(new Error("stray one"));
-        Promise.reject(new Error("stray two"));
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        // Rejected only once the answer is on its way out: the case the title names. (Round 2,
+        // Fable: these once fired before the return, so the failure path answered instead.)
+        setTimeout(() => Promise.reject(new Error("stray one")), 0);
+        setTimeout(() => Promise.reject(new Error("stray two")), 5);
         return ${answer};
       },
     }));`;
@@ -200,6 +201,7 @@ describe("a stray error after the answer", () => {
     const lines = ran.stdout.trim().split("\n");
     assert.equal(lines.length, 1, ran.stdout);
     assert.equal(decisionOf(JSON.parse(lines[0])), "ask");
+    assert.match(lines[0], /judged/, "the judge's own answer, not the failure path's");
   });
 
   it("a Stop hook still exits 0 with exactly one answer", () => {
@@ -207,5 +209,6 @@ describe("a stray error after the answer", () => {
     const ran = spawn(straying("stopMain", '{ feedback: "judged" }'), stop);
     assert.equal(ran.status, 0, ran.stderr);
     assert.equal(ran.stdout.trim().split("\n").length, 1, ran.stdout);
+    assert.match(ran.stdout, /judged/, "the judge's own answer, not a notice that it failed");
   });
 });

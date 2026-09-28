@@ -160,12 +160,16 @@ describe("every source file explains itself", () => {
 });
 
 describe("history", () => {
-  it("every commit is authored and committed as Jordo <jordo@jord0.net>", () => {
-    const people = execFileSync("git", ["log", "--format=%an <%ae>|%cn <%ce>"], { cwd: ROOT })
+  // Contributors are welcome, so this checks WHAT an identity says, not who it is: no author or
+  // committer carries a private word (a machine's name, a personal address). It once required
+  // one fixed author, which every contributor's pull request and every merge in GitHub's UI
+  // would fail (round 2, Fable).
+  it("no author or committer names a private machine or address", () => {
+    const people = execFileSync("git", ["log", "--format=%an <%ae>%n%cn <%ce>"], { cwd: ROOT })
       .toString("utf8")
       .split("\n")
       .filter(Boolean);
-    const strangers = [...new Set(people.flatMap((p) => p.split("|")))].filter((p) => p !== "Jordo <jordo@jord0.net>");
-    assert.deepEqual(strangers, []);
+    const leaking = [...new Set(people)].filter((who) => leaksIn(who).length > 0);
+    assert.deepEqual(leaking.map((who) => leaksIn(who)), []);
   });
 });

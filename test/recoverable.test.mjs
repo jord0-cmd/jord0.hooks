@@ -684,6 +684,7 @@ const QUIET = [
   'echo "rm -rf wip"',
   'git commit -m "find wip -delete"',
   "command -v rm",
+  "command -v rm -rf wip", // a lookup of three names; without the lookup rule it would be a delete
   "type rm",
   "which rm find git",
   "man rm",
@@ -924,4 +925,23 @@ describe("the hook: round 2 false alarms stay silent", () => {
     assert.equal(decision, "silent");
     assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms`);
   });
+});
+
+// The documented floors (docs/hooks/recoverable.md, Limits): what this guard cannot know from the
+// text, pinned SILENT. If one of these starts asking, the guard learned something and the Limits
+// page is out of date; if a new floor appears, it belongs here and on that page.
+const FLOORS = [
+  "$(echo rm) -rf wip", // a program name the text does not spell
+  "bash script.sh", // a script file handed to a shell
+  "source script.sh",
+  "printf '%s\\n' 'rm -rf wip' | bash", // printf's format, interpreted at run time
+];
+
+describe("the hook: documented floors stay silent", () => {
+  for (const command of FLOORS) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
 });
