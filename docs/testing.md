@@ -28,6 +28,8 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | every leaked name is reported, not only the first | (two planted leaks) | both reported |
 | git's pins reach it on git 2.30 | pins moved back off the command line | red |
 | no repository hook can run | the `core.hooksPath` pin, checked on every call | red |
+| a partial clone's transport never runs (`core.sshCommand`, `uploadpack`) | both transport pins | red, both transports |
+| both transport pins reach every git call | `protocol.allow` or `GIT_NO_LAZY_FETCH`, each removed alone | red, one mutation each |
 | a broken repository config is a failure, not silence | any git error read as "not a repository" | red |
 | a required filter does not kill `git status` | `required=false` beside the blank | red |
 | a commented-out `--help` handler does not count | comment stripping | red |

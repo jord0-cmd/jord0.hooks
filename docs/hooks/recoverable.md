@@ -58,7 +58,9 @@ A security hook that runs `git status` runs it inside whatever repository the co
 
 Hooks are the third. A `git status` that refreshes the index runs `post-index-change`, from `.git/hooks` or wherever the repository's `core.hooksPath` points.
 
-So every git call RECOVERABLE makes pins `core.fsmonitor` off, blanks every filter driver the repository's own config defines, and pins signature checks off. It never refreshes the index, and it points `core.hooksPath` at `/dev/null`. Either alone was driven to zero hook runs. Reading config runs nothing, so the drivers are listed first. Drivers from your global config, git-lfs for one, are yours and keep working.
+A partial clone holds the fourth. Objects left on its promisor remote are fetched the moment anything reads them, `git status` included, and the fetch runs the transport the repository names: `core.sshCommand` for an ssh URL, `remote.<name>.uploadpack` for a local one. Both were driven running.
+
+So every git call RECOVERABLE makes pins `core.fsmonitor` off, blanks every filter driver the repository's own config defines, and pins signature checks off. It never refreshes the index, and it points `core.hooksPath` at `/dev/null`. It refuses every transport (`protocol.allow=never`, and `GIT_NO_LAZY_FETCH=1` for git 2.44 and later), so a status that needs a missing object fails, and the guard asks as it does for any repository it cannot read. Either alone was driven to zero hook runs. Reading config runs nothing, so the drivers are listed first. Drivers from your global config, git-lfs for one, are yours and keep working.
 
 The pins ride on git's command line as `-c key=value`. The tidier `GIT_CONFIG_COUNT` environment variables arrived in git 2.31, and git 2.30 was driven ignoring them and running both programs. The command-line form held on 2.30, 2.34 and 2.39.
 

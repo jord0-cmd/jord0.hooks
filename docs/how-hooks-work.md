@@ -90,6 +90,8 @@ There is no approval prompt, and the hooks fire in every session where the plugi
 
 Any hook that runs git inside a repository it did not choose inherits both. RECOVERABLE pins `core.fsmonitor` off and blanks the filter drivers the repository's own config defines, as `-c key=value` on git's command line.
 
+**Driven** on git 2.47: in a partial clone with one object missing, the same `git status` fetched it through the transport the repository names, and ran a `core.sshCommand` program, and a `remote.origin.uploadpack` program. RECOVERABLE refuses every transport (`protocol.allow=never`, and `GIT_NO_LAZY_FETCH=1` from git 2.44).
+
 **Driven** on git 2.30.2: the `GIT_CONFIG_COUNT` environment variables, which arrived in 2.31, were ignored, and both programs ran. The command-line form held on 2.30, 2.34 and 2.39.
 
 ## The transcript is not a contract

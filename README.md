@@ -48,7 +48,7 @@ A guard that crashes is a guard that allows. Claude Code runs a tool when its Pr
 
 The shell commands are found by tree-sitter's bash grammar, loaded as WebAssembly, instead of by splitting on `;` and `&&`. A commit message that mentions `rm -rf` is one quoted word. A delete inside `( … )`, `if … then` or `$( … )` is still a delete. A command the grammar cannot parse counts as unread, never as clean.
 
-RECOVERABLE asks git, not a list of dangerous paths. When it runs git inside your repository it switches off the two things a repository's own config can make `git status` execute: `core.fsmonitor`, and the clean filters `.gitattributes` selects. Both were driven running from inside `git status` before that switch went in.
+RECOVERABLE asks git, not a list of dangerous paths. When it runs git inside your repository it switches off everything a repository's own config can make `git status` execute: `core.fsmonitor`, the clean filters `.gitattributes` selects, repository hooks, and the fetch a partial clone makes for a missing object, which runs whatever transport the repository names. Each was driven running from inside `git status` before its switch went in.
 
 ## Tests
 

@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -214,6 +214,28 @@ describe("judges: asking git without running the repository's programs", () => {
     assert.equal(existsSync(join(tree, "..", "filter-ran")), false);
   });
 
+  // A partial clone keeps some objects on its promisor remote, and git fetches one the moment
+  // anything reads it, `git status` included. The fetch runs the transport the REPOSITORY's
+  // config names. Round 2 drove both of these to a run on git 2.47 before the pins existed.
+  for (const [transport, config] of [
+    ["core.sshCommand over an ssh URL", (trap) => [["remote.origin.url", "ssh://example.invalid/x.git"], ["core.sshCommand", trap]]],
+    ["remote.origin.uploadpack over a local URL", (trap) => [["remote.origin.url", join(tree, "..", "nowhere.git")], ["remote.origin.uploadpack", trap]]],
+  ]) {
+    it(`never runs the promisor transport a partial clone names: ${transport}`, async () => {
+      const ran = join(tree, "..", "transport-ran");
+      const trap = join(tree, "..", "transport.sh");
+      writeFileSync(trap, `#!/bin/sh\necho "$@" > "${ran}"\nexit 1\n`);
+      chmodSync(trap, 0o755);
+      gitIn(tree, "config", "extensions.partialClone", "origin");
+      gitIn(tree, "config", "remote.origin.promisor", "true");
+      for (const [key, value] of config(trap)) gitIn(tree, "config", key, value);
+      const head = gitIn(tree, "rev-parse", "HEAD^{tree}").trim();
+      rmSync(join(tree, ".git", "objects", head.slice(0, 2), head.slice(2))); // HEAD's tree is now only promised
+      await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
+      assert.equal(existsSync(ran), false, `the repository's transport ran: ${existsSync(ran) ? readFileSync(ran, "utf8") : ""}`);
+    });
+  }
+
   it("carries every pin on git's command line, where even git 2.30 honours it", async () => {
     // GIT_CONFIG_COUNT arrived in git 2.31, and git 2.30 was driven ignoring it. A shim ahead
     // of the real git records every call's arguments.
@@ -221,7 +243,7 @@ describe("judges: asking git without running the repository's programs", () => {
     const shimDir = join(tree, "..", "shim");
     const log = join(tree, "..", "git-calls.log");
     mkdirSync(shimDir);
-    writeFileSync(join(shimDir, "git"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${log}"\nexec "${realGit}" "$@"\n`);
+    writeFileSync(join(shimDir, "git"), `#!/bin/sh\nprintf '%s NO_LAZY=%s\\n' "$*" "$GIT_NO_LAZY_FETCH" >> "${log}"\nexec "${realGit}" "$@"\n`);
     chmodSync(join(shimDir, "git"), 0o755);
     const saved = process.env.PATH;
     process.env.PATH = `${shimDir}:${saved}`;
@@ -237,6 +259,8 @@ describe("judges: asking git without running the repository's programs", () => {
       assert.match(call, /-c core\.fsmonitor= /, call);
       assert.match(call, /-c core\.hooksPath=\/dev\/null /, call);
       assert.match(call, /-c log\.showSignature=false /, call);
+      assert.match(call, /-c protocol\.allow=never /, call);
+      assert.match(call, /NO_LAZY=1$/, call);
     }
   });
 
