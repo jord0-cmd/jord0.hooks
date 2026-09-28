@@ -27,6 +27,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a trailing heredoc goes to the last pipeline stage | the last-stage rule | red |
 | every leaked name is reported, not only the first | (two planted leaks) | both reported |
 | a private word is caught in every spelling, and nothing else is | 14 planted spellings (dotted, underscored, capitalised, with digits, and the three shapes); 3 harmless neighbours | 14 red; the 3 stay green |
+| a commit message is scanned like a file | one planted message | red, naming the commit |
 | git's pins reach it on git 2.30 | pins moved back off the command line | red |
 | no repository hook can run | the `core.hooksPath` pin, checked on every call | red |
 | a partial clone's transport never runs (`core.sshCommand`, `uploadpack`) | both transport pins | red, both transports |

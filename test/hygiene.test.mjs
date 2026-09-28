@@ -67,6 +67,20 @@ describe("nothing private leaks", () => {
     }
     assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
   });
+
+  // A commit message is as public as a file, and no file scan reads it. Round 2 wrote a private
+  // word into one while describing this very test.
+  it("no commit message names one either", () => {
+    const log = execFileSync("git", ["log", "--format=%h%x00%B%x01"], { cwd: ROOT }).toString("utf8");
+    const hits = [];
+    for (const entry of log.split("\x01")) {
+      const [sha, body = ""] = entry.trim().split("\0");
+      body.split("\n").forEach((line, i) => {
+        for (const what of leaksIn(line)) hits.push(`${sha} line ${i + 1}  ${what}`);
+      });
+    }
+    assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
+  });
 });
 
 describe("the suite cleans up after itself", () => {
