@@ -44,15 +44,23 @@ function isPrivateWord(word) {
   return digestOf.get(word);
 }
 
-/** The private words and shapes in one line of text, as short labels (never the word itself). */
+/**
+ * The private words and shapes in one line of text, as short labels (never the word itself). The
+ * line is read twice: as written, and with each backslash-letter pair read as a gap, so a word in
+ * a regex (`\bname\b`) is still the word. The first reading keeps `C:\Users\name`, where the gap
+ * would eat the name's first letter. (The list this test once published was written as regexes:
+ * read only as written it gave 2 hits, read both ways 10.)
+ */
 function leaksIn(line) {
   const found = PRIVATE_SHAPES.filter((re) => re.test(line)).map(String);
-  const words = line.toLowerCase().replace(/[0-9]/g, "#").split(/[^a-z#]+/).filter(Boolean);
-  words.forEach((word, i) => {
-    if (isPrivateWord(word)) found.push(`private word ${i + 1}`);
-    else if (i > 0 && isPrivateWord(words[i - 1] + word)) found.push(`private words ${i}-${i + 1}`);
-  });
-  return found;
+  for (const [how, variant] of [["", line], [" in a regex", line.replace(/\\[A-Za-z]/g, " ")]]) {
+    const words = variant.toLowerCase().replace(/[0-9]/g, "#").split(/[^a-z#]+/).filter(Boolean);
+    words.forEach((word, i) => {
+      if (isPrivateWord(word)) found.push(`private word ${i + 1}${how}`);
+      else if (i > 0 && isPrivateWord(words[i - 1] + word)) found.push(`private words ${i}-${i + 1}${how}`);
+    });
+  }
+  return [...new Set(found)];
 }
 
 describe("nothing private leaks", () => {
