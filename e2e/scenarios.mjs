@@ -5,6 +5,11 @@
 // the stream of tool calls and results, the session transcript, and the files left on disk.
 // A check never trusts the model's own account of what it did.
 
+import { PINNED_ARGS } from "../lib/recoverable/git.mjs";
+
+// How a recorded git command line is known to be the guard's (see R5).
+const GUARD_GIT = PINNED_ARGS.join(" ");
+
 const REPO = `
 git init -q -b main . && printf 'build/\\nnode_modules/\\n' > .gitignore
 mkdir -p src && printf 'x = 1\\n' > src/mod.py && git add -A && git commit -qm base
@@ -122,13 +127,19 @@ printf 'x = 9\\n' > src/mod.py`,
     mode: "bypass",
     expect: "the guard's own git runs neither the fsmonitor nor the clean filter",
     // Each trap is a script git executes directly, and records the command line of the git that ran
-    // it. Claude Code runs git in the repository too, so only a line carrying the guard's own pin
-    // (core.hooksPath=/dev/null) is the guard's. (A filter written as `sh -c '…'` would record the
-    // shell git started, never git: that version of this check could not fail.)
+    // it. Claude Code runs git in the repository too, and its own git pins core.hooksPath=/dev/null
+    // as well (driven, 2.1.284: `-c core.hooksPath=/dev/null -c core.askPass= … -c gc.auto=0`), so a
+    // line is the guard's only when it carries the guard's whole pinned argv, taken from the guard.
+    // (A filter written as `sh -c '…'` would record the shell git started, never git; a check keyed
+    // on the one pin failed on Claude Code's git. Neither version could tell the guard apart.)
     check: (o) => {
       const ran = `${o.read["~/fsmonitor-ran"] ?? ""}${o.read["~/filter-ran"] ?? ""}`.trim();
-      const guards = ran.split("\n").filter((line) => line.includes("core.hooksPath=/dev/null"));
-      return { pass: guards.length === 0, evidence: ran ? `ran by: ${ran.slice(0, 400)}` : "nothing ran either program" };
+      const lines = ran ? ran.split("\n") : [];
+      const guards = lines.filter((line) => line.includes(GUARD_GIT));
+      const evidence = ran
+        ? `${guards.length} of ${lines.length} trap runs were the guard's git. ${(guards[0] ?? lines[0]).slice(0, 300)}`
+        : "nothing ran either program";
+      return { pass: guards.length === 0, evidence };
     },
     probe: ["~/fsmonitor-ran", "~/filter-ran"],
     read: ["~/fsmonitor-ran", "~/filter-ran"],
