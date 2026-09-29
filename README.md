@@ -34,7 +34,7 @@ To silence DONE-GATE for one shell only: `export JORD0_DONE_GATE=0`.
 
 - Node.js 20 or newer on your PATH. The hooks run as `node` scripts.
 - git 2.26 or newer, for RECOVERABLE.
-- Linux. That is where the end-to-end run was driven. macOS is claimed once CI has run there, not before. Windows is not claimed: RECOVERABLE's `find` dry run needs a POSIX `find`, and the tests need a POSIX shell.
+- Linux. That is where the end-to-end run was driven. macOS is in the CI matrix, on Node 20, 22 and 24, and is claimed when that matrix has run green. Not before. Windows is not claimed: RECOVERABLE's `find` dry run needs a POSIX `find`, and the tests need a POSIX shell.
 
 ## How they fail
 
@@ -52,7 +52,7 @@ RECOVERABLE asks git, not a list of dangerous paths. When it runs git inside you
 
 ## Tests
 
-`npm test` runs the unit suite on Node's built-in runner, with no dev dependencies. Every hardening test was proven able to fail: the thing it guards was removed, or changed, in a scratch copy, and the test went red. `npm run e2e` installs the plugin into a stock Claude Code in a container and drives each hook through a real session. It needs Docker and a token from `claude setup-token`.
+`npm test` runs the unit suite on Node's built-in runner, with no dev dependencies. Each hardening has a test that was proven able to fail: the thing it guards was removed, or changed, in a scratch copy, and the test went red. Two that stayed green were found by review and rewritten. `npm run e2e` installs the plugin into a stock Claude Code in a container and drives each hook through a real session. It needs Docker and a token from `claude setup-token`.
 
 ## License
 

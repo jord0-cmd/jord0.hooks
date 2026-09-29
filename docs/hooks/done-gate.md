@@ -29,9 +29,9 @@ It knows the test runners people use: pytest, `python -m pytest`, `python manage
 
 A Bash call exits with its last command's status. `pytest | tail -3` exits with `tail`'s, and `pytest; echo done` and `pytest || true` exit 0 however many tests failed.
 
-So when a test run's exit status is not the call's (a later command still runs after the tests fail: anything after `;`, `||` or `&`, and a later stage of its pipeline unless `set -o pipefail` is on), DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status: `pytest && echo ok`, a piped run under `pipefail`, and `pytest $(cat list.txt)` all own theirs.
+A test run loses its exit status to a command that still runs after the tests fail. Anything after `;`, `||` or `&` does. So does a later stage of its pipeline, unless `set -o pipefail` is on. Then DONE-GATE reads the output for the summary lines the runners print: "3 failed", "2 failed, 8 passed", "ℹ fail 2", "test result: FAILED", "FAIL", "FAILED (failures=1)", "BUILD FAILURE". It quotes the whole line. Otherwise it trusts the exit status: `pytest && echo ok`, a piped run under `pipefail`, and `pytest $(cat list.txt)` all own theirs.
 
-A test run inside a shell counts (`bash -c 'pytest -q'`, `docker exec app sh -c 'npm test'`), and so does a project task run by `pixi run`, `pdm run`, `hatch run` or `deno task` when it is named `test`, `check`, `verify` or `ci`. A run that tests nothing does not: `pytest --collect-only`, `cargo test --no-run`, `mvn install -DskipTests`, `gradle build -x test`, `make -n test`, `node app.js --test`.
+A test run inside a shell counts (`bash -c 'pytest -q'`, `docker exec app sh -c 'npm test'`). So does a project task run by `pixi run`, `pdm run`, `hatch run` or `deno task`, when it is named `test`, `check`, `verify` or `ci`. A run that tests nothing does not: `pytest --collect-only`, `cargo test --no-run`, `mvn install -DskipTests`, `gradle build -x test`, `make -n test`, `node app.js --test`.
 
 The hidden status cuts both ways. In `pytest -q; git push`, a push that fails exits 1 after nine tests passed. With no failure line in the output, DONE-GATE does not blame the tests. It says the status belongs to a command after them, and asks for the test run's own result line.
 
@@ -64,7 +64,7 @@ And when the last run failed behind a pipe:
 ## When it lets the stop through
 
 - A test ran after the last edit and passed.
-- No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it, and "I could not run the migration" is about something else; "I haven't tested it" is the whole. And no admission excuses a test run that failed.
+- No test ran, and the final message already says the work is not verified. That is the honest answer this hook asks for, so it does not ask twice. It has to be about the work as a whole. "Not tested on Windows" is about a corner of it. "I could not run the migration" is about something else. "I haven't tested it" is the whole. And no admission excuses a test run that failed.
 - `stop_hook_active` is true, which means Claude is already continuing because of a refusal. DONE-GATE refuses at most once per stop.
 - `JORD0_DONE_GATE=0` is set.
 - It cannot read the transcript, or the payload carries no final message. Then it lets the stop through and tells you it did not check, because a Stop hook that fails closed would trap the session.

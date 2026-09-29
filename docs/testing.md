@@ -26,7 +26,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a read script may be probed | the read history | red, four tests |
 | a trailing heredoc goes to the last pipeline stage | the last-stage rule | red |
 | every leaked name is reported, not only the first | (two planted leaks) | both reported |
-| a private word is caught in every spelling, and nothing else is | 14 planted spellings (dotted, underscored, capitalised, with digits, and the three shapes); 3 harmless neighbours | 14 red; the 3 stay green |
+| a private word is caught in every spelling, and nothing else is | 14 planted spellings (dotted, underscored, capitalised, with digits, and the three shapes), and 3 harmless neighbours | 14 red, and the 3 stay green |
 | a commit message is scanned like a file | one planted message | red, naming the commit |
 | git's pins reach it on git 2.30 | pins moved back off the command line | red |
 | no repository hook can run | the `core.hooksPath` pin, checked on every call | red |
@@ -69,10 +69,28 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | deleting a linked worktree names no lost commits | history tied to the git directory, not the top | red |
 | `git worktree remove --force` on a dirty worktree | `worktree` among the discarding subcommands | red |
 | Node starts with every flag in `hooks.json` | (a flag Node rejects, planted) | red |
+| `..` after a link is the parent of where the link points | the walk through the disk, in both of its halves | red, one mutation each |
+| the shell's own `cd ..` goes by name | every `cd` made physical | red, two tests |
+| `cd -P` and `set -P` go where the link points, in the shells that inherit them | the flag, the setting, its scope | red, fifteen mutations |
+| a find through a link names the files where they are | the victims' real directory | red, four tests |
+| a printed name is a name and not a pattern | the expansion switched off for what find prints and xargs is handed | red, one mutation each |
+| a submodule's work is read from above it, however deep | the index listing, and the read | red, one mutation each |
+| a clone in an ignored directory is found | the walk | red, four tests |
+| the walk stops at two thousand directories, and thirty-three repositories ask unread | each bound | red, one mutation each |
+| one git directory's history is counted once | the count per git directory | red |
+| an xargs item that names nothing is nothing to lose | the older rule, that every missing item is unread | red, four tests |
+| a wrapper's option takes its value (`timeout -k`, `flock -w`, `exec -a`, `env --chdir=`) | each option | red, one mutation each |
+| fifteen payloads deep is followed, sixteen is not | the depth raised, the depth lowered | red, one mutation each |
 
 One of them lied first.
 
 The clean-filter test passed with the filter blanking removed. Its fixture changed the file's size, and git spotted the change from the file's size alone, without hashing it, so it never needed the filter. A same-size edit forces the hash. The rewritten test goes red without the guard and green with it.
+
+Others lied later.
+
+The pipe rule's test stayed green with the rule deleted, because the rule was dead code: a piped test always had a command after it. `command -v rm` stayed silent with the lookup rule removed, because an `rm` with no operand deletes nothing. A test named for a sweep above every repository was rooted at the repository itself, and the mutant it was written for survived. Each was found by a mutant that lived, or by a reviewer who ran one.
+
+Mutants are run again after every change. A new second path to the same answer let two old ones live, and both times the second path was counting one loss twice.
 
 ## The loud list and the quiet list
 
@@ -80,7 +98,11 @@ A guard that fails closed asks about everything. That would pass any test that o
 
 ## A review before release
 
-Before anything was published, six Claude models read the code, each hunting a different class of flaw. One was told to break the consensus. A non-Claude model read it too, because Claude models share blind spots. A seventh Claude weighed their findings against the code and ran the disputed ones. Every finding was reproduced before it was fixed. Each fix got a test that fails without it. No exceptions.
+Before anything was published, six Claude models read the code, each hunting a different class of flaw. One was told to break the consensus. A non-Claude model read it too, because Claude models share blind spots. A seventh Claude weighed their findings against the code and ran the disputed ones.
+
+A second round read the finished tree: a bench of five, one model alone with forty minutes, one pass by a model from a different family. About ninety findings. Thirty were driven against the real hook before anything was fixed. Twenty-eight held as stated.
+
+Each fix got a test that fails without it. Sixteen did not at first: the paths worked when driven by hand and nothing in the suite drove them. They have their tests now, and a mutant each.
 
 ## A vanilla Claude Code
 
