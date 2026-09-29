@@ -458,6 +458,10 @@ describe("DONE-GATE, round 3 MINORs", () => {
       assert.match(await refused([bash(command)]), what);
     });
   }
+  it("sees a test run behind a wrapper the table learned in round 3: strace -f pytest", async () => {
+    assert.equal(await refused([edit("/w/a.py"), bash("strace -f -o /dev/null pytest -q", { output: "3 passed" })]), "");
+  });
+
   for (const command of ["cp src/app.py /tmp/backup.bak", "mv notes.md old-notes.md", "cp -r src /tmp/snapshot", "install -m 644 new.py"]) {
     it(`counts no source edit: ${command}`, async () => {
       assert.equal(await refused([bash(command)]), "");

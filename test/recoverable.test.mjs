@@ -1544,3 +1544,46 @@ describe("the hook: round 3 MINORs in the judges", () => {
     assert.ok(Date.now() - started < 1500, `${Date.now() - started} ms`);
   });
 });
+
+// env -S decodes as GNU env does (Opus 5 #11), and four wrappers are followed (chair NIT). Each
+// shape was driven against coreutils 9.7 env, util-linux 2.40 and each tool's own --help; each env
+// row below reads differently under the old decoder, which honoured quotes and `\x` only.
+const LOUD_MINORS_C = [
+  [String.raw`env -S 'rm\_-rf\_wip'`, WIP], // `\_` separates words: really runs rm -rf wip
+  [String.raw`env -S 'rm -rf wip\c trailing'`, WIP], // `\c` ends the string
+  ["numactl --cpunodebind=0 rm -rf wip", WIP],
+  ["numactl -C 0-3 rm -rf wip", WIP],
+  ["unshare rm -rf wip", WIP],
+  ["unshare -r -w wip rm -rf deep", DEEP], // -w changes the directory the command runs in
+  ["unshare --wd=wip rm -rf deep", DEEP],
+  ["strace -f -o /dev/null rm -rf wip", WIP],
+  ["cd .. && strace -E GIT_DIR=tree/.git -E GIT_WORK_TREE=tree git checkout -- .", EDIT], // -E sets its environment
+  ["chrt 10 rm -rf wip", WIP],
+  ["chrt -f 10 rm -rf wip", WIP],
+];
+const QUIET_MINORS_C = [
+  String.raw`env -S 'rm -rf \q wip'`, // an escape env does not know: it refuses the string, nothing runs
+  `env -S 'rm -rf "wip'`, // an unterminated quote: refused too
+  "numactl --show",
+  "strace -p 1234", // attaches to a running process, starts nothing
+  "chrt -p 10 1234",
+  "chrt -m",
+];
+
+describe("the hook: round 3 MINORs in the wrapper table", () => {
+  for (const [command, { names, not }] of LOUD_MINORS_C) {
+    it(JSON.stringify(command), async () => {
+      const main = await hook(command);
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
+    });
+  }
+  for (const command of QUIET_MINORS_C) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+});
