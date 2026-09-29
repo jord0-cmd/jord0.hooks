@@ -1207,6 +1207,21 @@ describe("the hook: a repository inside the target is read", () => {
     assert.match((await hook("rm -rf vendor/sub")).reason, /work git cannot give back: vendor\/sub\/inflight\.md \(1 path/);
   });
 
+  it("reads a submodule with unrecorded commits as the submodule, not as a dirty path above it", async () => {
+    submodule("vendor/sub", null);
+    const sub = join(tree, "vendor", "sub");
+    writeFileSync(join(sub, "b.txt"), "b\n");
+    gitIn(sub, "add", "-A");
+    gitIn(sub, "commit", "-q", "-m", "local only");
+    // The commit lives in .git/modules; deleting the work tree leaves it. Asked either way, silent.
+    for (const command of ["rm -rf vendor/sub", "rm -rf vendor"]) {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    }
+    writeFileSync(join(sub, "inflight.md"), "x\n");
+    assert.match((await hook("rm -rf vendor")).reason, /vendor\/sub\/inflight\.md \(1 path/);
+  });
+
   it("counts no history for a submodule: its commits live in the git directory around it", async () => {
     submodule("vendor/sub", null);
     writeFileSync(join(tree, "vendor", "sub", "b.txt"), "b\n");
