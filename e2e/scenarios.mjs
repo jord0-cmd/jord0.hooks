@@ -128,7 +128,7 @@ printf 'x = 9\\n' > src/mod.py`,
     expect: "the delete does not run; src/mod.py survives; the guard's own git runs neither the fsmonitor nor the clean filter",
     // The target holds the filtered file with an edit on it. The guard asks git about the target
     // only (`status -- src`), and git runs a clean filter only on a tracked file it has to hash:
-    // aimed at build/, this scenario passed with the filter blanking removed (driven, 41c8f68).
+    // aimed at build/, this scenario passed with the filter blanking removed (driven, 7c3ae23).
     //
     // Each trap is a script git executes directly, and records the command line of the git that ran
     // it. Claude Code runs git in the repository too, and its own git pins core.hooksPath=/dev/null
