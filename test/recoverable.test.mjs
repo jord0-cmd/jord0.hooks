@@ -879,6 +879,11 @@ const LOUD_ROUND_2 = [
   // Payloads within payloads are followed to the command, up to a depth, and judged where they run past it.
   [`${"eval ".repeat(15)}rm -rf wip`, WIP],
   [`${"eval ".repeat(17)}rm -rf wip`, TOO_DEEP],
+  // What xargs is handed. An item that names nothing is nothing to lose, and the rest is judged;
+  // an item under xargs' own quoting that names nothing here may name something there.
+  ["echo wip does-not-exist | xargs rm -rf", WIP],
+  ["echo \"'wi p'\" | xargs rm -rf", FALLBACK],
+  ["echo 'wi\\ p' | xargs -I{} rm -rf {}", FALLBACK],
 ];
 
 const QUIET_ROUND_2 = [
@@ -895,6 +900,9 @@ const QUIET_ROUND_2 = [
   "cd nosuchdir && rm -rf *", // the cd fails, so the rm never runs
   "mkdir -p scratch; cd scratch; rm -rf *", // the mkdir made it: the cd succeeds
   "echo build | xargs rm -rf",
+  "echo does-not-exist | xargs rm -rf", // names nothing: rm -f would say nothing either
+  "echo 'wi*' | xargs rm -rf", // xargs runs no shell: the `*` is a character, and no file has it
+  "xargs -0 rm -rf <<< \"'wip'\"", // with -0 a quote is a character too
   'for d in build node_modules; do rm -rf "$d"; done',
 ];
 
@@ -951,7 +959,7 @@ describe("the hook: round 2 false alarms stay silent", () => {
 //   tree/build/link       -> tree/wip           an ignored link into the work
 //   <parent>/linked                             a linked worktree holding scratch.txt
 //   <parent>/home                               an empty HOME
-const NOTES = { names: /wip\/notes\.md/, not: /plate|src\/mod\.py/ };
+const NOTES = { names: /back: wip\/notes\.md \(1 path/ }; // that file, once, by its name in its repository
 const SWEPT = { names: /wip\/deep\/plate\.png, wip\/notes\.md/, not: /src\/mod\.py/ };
 const LOUD_ELSEWHERE = [
   // `..` after a symlink is the parent of where the link points: the kernel resolves an operand.
@@ -960,6 +968,17 @@ const LOUD_ELSEWHERE = [
   ["cd wiplink/deep && cd .. && rm -rf deep", ".", DEEP],
   ["cd -P outside/into && cd .. && rm -rf notes.md", "..", NOTES], // -P: the shell goes where the link points
   ["cd -LP outside/into && cd .. && rm -rf notes.md", "..", NOTES], // the last of -L and -P wins
+  // `set -P` makes every cd of that shell physical, for the shells that inherit it (driven, bash 5.2).
+  ["set -P; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["set -o physical; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["set -eP; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["set -P; cd -L outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["set -P; (cd outside/into && cd .. && rm -rf notes.md)", "..", NOTES],
+  ["eval 'set -P'; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["f() { set -P; }; f; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  ["if true; then set -P; fi; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES], // it may be on: both places
+  ["set -P; f() { cd outside/into && cd .. && rm -rf notes.md; }; f", "..", NOTES], // a function runs in this shell
+  ["set -P; eval 'cd outside/into && cd .. && rm -rf notes.md'", "..", NOTES], // and so does an eval
   ["rm -rf build/link/", ".", SWEPT], // a trailing slash names the directory behind the link
   // A find that walks through a link deletes what is behind it.
   ["find wiplink/ -type f -delete", ".", SWEPT],
@@ -970,7 +989,7 @@ const LOUD_ELSEWHERE = [
   // The repository is named by where the command points, not by where it runs.
   ["env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
   ["git worktree remove --force linked", ".", { names: /scratch\.txt/, not: /wip\/|src\/mod\.py/ }],
-  ["rm -rf <parent>", "src", { names: /1 commit on no remote.*src\/mod\.py/ }],
+  ["rm -rf <parent>", "src", { names: /back: 1 commit on no remote, and src\/mod\.py/ }],
   ["cd; rm -rf wip", "..", WIP, { HOME: "<tree>" }], // a bare cd goes HOME
 ];
 
@@ -978,6 +997,13 @@ const QUIET_ELSEWHERE = [
   ["cd; rm -rf wip", ".", { HOME: "<parent>/home" }], // HOME holds no wip: the rm runs there, not here
   ["cd outside/into && cd .. && rm -rf notes.md", ".."], // the shell's own `cd ..` is by name: it lands in outside
   ["cd -P -L outside/into && cd .. && rm -rf notes.md", ".."],
+  ["set -P; set +P; cd outside/into && cd .. && rm -rf notes.md", ".."],
+  ["set -P; set +o physical; cd outside/into && cd .. && rm -rf notes.md", ".."],
+  ["(set -P); cd outside/into && cd .. && rm -rf notes.md", ".."], // a subshell's setting ends with it
+  ["set -P; bash -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."], // a new shell starts without it
+  ["set -P; echo x | xargs sh -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."],
+  ["set -P; find outside -maxdepth 0 -exec sh -c 'cd outside/into && cd .. && rm -rf notes.md' \\;", ".."],
+  ["set -e; cd outside/into && cd .. && rm -rf notes.md", ".."],
   ["find wiplink -type f -delete", "."], // find does not follow a link it is handed without a slash
   ["rm -rf outside/into", ".."], // removes the link, not what it points to
 ];
@@ -1031,6 +1057,18 @@ describe("the hook: shapes that need a link, another directory, a HOME or a PATH
     assert.match(reason, /wip\/\[n\]otes\.md \(1 path/, reason);
   });
 
+  it("judges both places after a `set -P` that may not have run", async () => {
+    // cleandir/lnk -> wip/deep. By name, `cd ..` lands in cleandir; on disk, in wip.
+    symlinkSync(join(tree, "wip", "deep"), join(tree, "cleandir", "lnk"));
+    writeFileSync(join(tree, "cleandir", "draft.md"), "in flight\n");
+    const maybe = await hook("if false; then set -P; fi; cd cleandir/lnk && cd .. && rm -rf draft.md notes.md");
+    assert.match(maybe.reason, /back: cleandir\/draft\.md, wip\/notes\.md \(2 paths/, maybe.reason);
+    const on = await hook("set -P; cd cleandir/lnk && cd .. && rm -rf draft.md notes.md");
+    assert.match(on.reason, /back: wip\/notes\.md \(1 path/, on.reason);
+    const off = await hook("cd cleandir/lnk && cd .. && rm -rf draft.md notes.md");
+    assert.match(off.reason, /back: cleandir\/draft\.md \(1 path/, off.reason);
+  });
+
   it("never takes xargs' replacement token for a file of that name", async () => {
     writeFileSync(join(tree, "{}"), "a file named like the token\n");
     const { decision, reason } = await hook("echo build | xargs -I{} rm -rf {}");
@@ -1066,31 +1104,113 @@ describe("the hook: documented floors stay silent", () => {
     });
   }
 
-  it("a delete above a submodule does not read the submodule's work tree", async () => {
-    const source = join(tree, "..", "subsrc");
-    mkdirSync(source);
-    gitIn(source, "init", "-q", "-b", "main", ".");
-    writeFileSync(join(source, "a.txt"), "a\n");
-    gitIn(source, "add", "-A");
-    gitIn(source, "commit", "-q", "-m", "base");
-    gitIn(tree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", source, "vendor/sub");
-    gitIn(tree, "commit", "-q", "-m", "submodule");
-    writeFileSync(join(tree, "vendor", "sub", "inflight.md"), "in the submodule\n");
-    assert.equal((await hook("rm -rf vendor")).decision, "silent");
-    // Named itself, the submodule is a repository like any other, and its work is read.
-    assert.match((await hook("rm -rf vendor/sub")).reason, /^RECOVERABLE: `rm` would destroy .*inflight\.md \(1 path/);
+});
+
+// A repository inside the target: a submodule, a clone in an ignored directory, another
+// repository below a directory above this one. The outer `git status` says nothing about work
+// inside it, so each is found and asked as the repository it is.
+describe("the hook: a repository inside the target is read", () => {
+  /** A repository at `dir` with one commit and one untracked file, `name`. */
+  const cloneAt = (dir, name) => {
+    mkdirSync(dir, { recursive: true });
+    gitIn(dir, "init", "-q", "-b", "main", ".");
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-q", "-m", "base");
+    if (name) writeFileSync(join(dir, name), "in flight\n");
+  };
+  const submodule = (at, name) => {
+    const source = join(tree, "..", `src-${at.replaceAll("/", "-")}`);
+    cloneAt(source, null);
+    gitIn(tree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", source, at);
+    gitIn(tree, "commit", "-q", "-m", `submodule ${at}`);
+    if (name) writeFileSync(join(tree, at, name), "in flight\n");
+  };
+
+  it("a delete above a submodule names the work in the submodule", async () => {
+    submodule("vendor/sub", "inflight.md");
+    const main = await hook("rm -rf vendor");
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*vendor\/sub\/inflight\.md \(1 path/, main.reason);
+    assert.equal((await hook("rm -rf vendor", { agent: true })).decision, "deny");
+    // Named itself, it is read once, as the repository it is.
+    assert.match((await hook("rm -rf vendor/sub")).reason, /work git cannot give back: inflight\.md \(1 path/);
   });
 
-  it("a delete above the repository it runs in does not walk the other repositories below it", async () => {
+  it("counts no history for a submodule: its commits live in the git directory around it", async () => {
+    submodule("vendor/sub", null);
+    writeFileSync(join(tree, "vendor", "sub", "b.txt"), "b\n");
+    gitIn(join(tree, "vendor", "sub"), "add", "-A");
+    gitIn(join(tree, "vendor", "sub"), "commit", "-q", "-m", "a commit on no remote");
+    writeFileSync(join(tree, "vendor", "sub", "inflight.md"), "in flight\n");
+    const { reason } = await hook("rm -rf vendor");
+    assert.match(reason, /vendor\/sub\/inflight\.md/, reason);
+    assert.doesNotMatch(reason, /on no remote/, reason);
+  });
+
+  it("finds a submodule past the walk's reach, from the index", async () => {
+    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "third_party", "pad", `d${i}`), { recursive: true });
+    submodule("third_party/deep/a/b/sub", "inflight.md");
+    assert.match((await hook("rm -rf third_party")).reason, /third_party\/deep\/a\/b\/sub\/inflight\.md \(1 path/);
+  });
+
+  it("stays silent on a stray `.git` that git does not take for a repository", async () => {
+    mkdirSync(join(tree, "cleandir", "inner", ".git"), { recursive: true });
+    assert.equal((await hook("rm -rf cleandir")).decision, "silent");
+  });
+
+  it("stays silent above a submodule that is not checked out", async () => {
+    submodule("vendor/sub", null);
+    gitIn(tree, "submodule", "deinit", "-q", "-f", "vendor/sub");
+    assert.equal((await hook("rm -rf vendor")).decision, "silent");
+  });
+
+  it("finds a submodule however deep it sits", async () => {
+    submodule("third_party/a/b/c/sub", "inflight.md");
+    assert.match((await hook("rm -rf third_party")).reason, /third_party\/a\/b\/c\/sub\/inflight\.md \(1 path/);
+  });
+
+  it("stays silent above a submodule with nothing of its own to lose", async () => {
+    submodule("vendor/sub", null);
+    assert.equal((await hook("rm -rf vendor")).decision, "silent");
+  });
+
+  it("a find that sweeps a submodule names what it matches there, and only that", async () => {
+    submodule("vendor/sub", "inflight.md");
+    const swept = await hook("find vendor -type f -delete");
+    assert.match(swept.reason, /^RECOVERABLE: `find` .*vendor\/sub\/inflight\.md \(1 path/, swept.reason);
+    assert.equal((await hook("find vendor -name a.txt -delete")).decision, "silent"); // committed: git gives it back
+  });
+
+  it("a delete of an ignored directory names the work in a clone inside it", async () => {
+    cloneAt(join(tree, "build", "deps", "clone"), "patched.md");
+    const main = await hook("rm -rf build");
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /1 commit on no remote in build\/deps\/clone, and build\/deps\/clone\/patched\.md \(1 path/, main.reason);
+  });
+
+  it("a delete above the repository it runs in names the work in the others below it", async () => {
     const parent = join(tree, "..");
-    const other = join(parent, "other");
-    mkdirSync(other);
-    gitIn(other, "init", "-q", "-b", "main", ".");
-    writeFileSync(join(other, "theirs.md"), "theirs\n");
+    cloneAt(join(parent, "other"), "theirs.md");
+    gitIn(tree, "stash", "push", "-u", "-q"); // nothing dirty here, so the reason has room for the other's
     const swept = await hook(`rm -rf ${parent}`);
-    assert.match(swept.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, swept.reason);
-    assert.doesNotMatch(swept.reason, /theirs\.md/, swept.reason);
-    // Named itself, the other repository is read.
-    assert.match((await hook(`rm -rf ${other}`)).reason, /theirs\.md \(1 path/);
+    assert.match(swept.reason, /^RECOVERABLE: `rm` would destroy /, swept.reason);
+    assert.match(swept.reason, /1 commit on no remote, the stash, 1 commit on no remote in other/, swept.reason);
+    assert.match(swept.reason, /other\/theirs\.md \(1 path/, swept.reason);
+  });
+
+  // The documented limit: the walk lists 2,000 directories below a target, nearest first.
+  it("does not find a clone past the walk's reach", async () => {
+    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
+    cloneAt(join(tree, "build", "deep", "a", "b", "clone"), "patched.md");
+    assert.equal((await hook("rm -rf build")).decision, "silent");
+    assert.match((await hook("rm -rf build/deep")).reason, /build\/deep\/a\/b\/clone\/patched\.md/); // within reach from here
+  });
+
+  it("asks without naming when there are more repositories below the target than it reads", async () => {
+    for (let i = 0; i < 33; i += 1) cloneAt(join(tree, "build", `clone${i}`), null);
+    const main = await hook("rm -rf build");
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /could not ask git .*more than 32 repositories below/, main.reason);
   });
 });
