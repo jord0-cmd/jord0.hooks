@@ -188,7 +188,7 @@ describe("judges: git", () => {
   });
 
   it("asks when the same command stashes first and then drops", async () => {
-    const before = [words("git stash -u")];
+    const before = [{ argv: words("git stash -u"), certain: true, base: tree }];
     assert.equal((await judges.git(words("git stash drop"), ctx("", before)))?.decision, "ask");
   });
 });
@@ -903,6 +903,21 @@ const LOUD_ROUND_2 = [
   ["S=bash; $S -c 'rm -rf wip'", WIP],
   ["if true; then R=rm; else R=ls; fi; $R -rf wip", WIP], // either may run: each is judged
   ["for p in ls rm; do $p -rf wip; done", WIP],
+  // Round 3. A save that may not run saves nothing; a save's paths are read where it ran.
+  ["false && git add -A; rm -rf wip", WIP],
+  ["if false; then git add -A; fi\nrm -rf wip", WIP],
+  ["true || git stash push -u -q; rm -rf wip", WIP],
+  ["cd src; git add mod.py; cd ..; rm -rf wip src", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["f() { git add -A; }; false && f; rm -rf wip", WIP], // a function called behind `&&` may not run
+  ["trap 'git add -A' EXIT; rm -rf wip", WIP], // a trap runs at the end, after the delete
+  // `"$@"` in the program's place is every word it holds.
+  ["sh -c 'exec \"$@\"' _ rm -rf wip", WIP],
+  ["bash -c '\"$@\"' _ rm -rf wip", WIP],
+  // A branch made from a start point takes the work tree to it (driven, git 2.47): the edits go.
+  ["git switch -f -c hot HEAD", EDIT],
+  ["git switch -f -C hot main", EDIT],
+  // More values than the guard follows: judged where it runs, never dropped.
+  ["for f in a b c d e f g h rm; do $f -rf wip; done", { names: /more values than this guard follows/ }],
 ];
 
 const QUIET_ROUND_2 = [
@@ -931,6 +946,7 @@ const QUIET_ROUND_2 = [
   "G=git; $G add -A && rm -rf wip", // the add, read through its variable, put the files in the index
   "C=command; $C -v rm -rf wip", // a lookup through a variable runs nothing
   "W=sudo; $W git add -A && rm -rf wip", // the add runs under the wrapper, and still saves the files
+  "git add -A; rm -rf wip", // a save that certainly ran
 ];
 
 describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
@@ -1272,10 +1288,40 @@ describe("the hook: a repository inside the target is read", () => {
     assert.match((await hook("rm -rf build/zdeep")).reason, /build\/zdeep\/clone\/patched\.md/);
   });
 
+  it("reads a repository in an untracked directory once, and never counts its directory as a loss", async () => {
+    const clone = join(tree, "pkgs", "p1");
+    cloneAt(clone, null);
+    gitIn(clone, "remote", "add", "origin", clone);
+    gitIn(clone, "fetch", "-q", "origin"); // every commit is on a remote: nothing here is lost
+    assert.equal((await hook("rm -rf pkgs")).decision, "silent");
+    assert.equal((await hook("rm -rf pkgs", { agent: true })).decision, "silent");
+    writeFileSync(join(clone, "ndirty.txt"), "in flight\n");
+    const { reason } = await hook("rm -rf pkgs");
+    assert.match(reason, /back: pkgs\/p1\/ndirty\.txt \(1 path/, reason);
+  });
+
+  it("reads a repository git names in an untracked directory, past the walk's reach", async () => {
+    for (let i = 0; i < 20_100; i += 1) mkdirSync(join(tree, "pkgs", "pad", `d${i}`), { recursive: true });
+    cloneAt(join(tree, "pkgs", "zdeep", "clone"), "patched.md");
+    assert.match((await hook("rm -rf pkgs")).reason, /pkgs\/zdeep\/clone\/patched\.md/);
+  });
+
   it("asks without naming when there are more repositories below the target than it reads", async () => {
     for (let i = 0; i < 33; i += 1) cloneAt(join(tree, "build", `clone${i}`), null);
     const main = await hook("rm -rf build");
     assert.equal(main.decision, "ask");
     assert.match(main.reason, /could not ask git .*more than 32 repositories below/, main.reason);
+  });
+});
+
+// A tree with more dirty files than a function call can take as arguments. Slow to build, so once.
+describe("the hook: a very large dirty tree", () => {
+  it("names the loss instead of failing on the size of the list", async () => {
+    const big = join(tree, "wip", "big");
+    mkdirSync(big);
+    for (let i = 0; i < 150_000; i += 1) writeFileSync(join(big, `f${i}`), "");
+    const { decision, reason } = await hook("rm -rf wip");
+    assert.equal(decision, "ask");
+    assert.match(reason, /^RECOVERABLE: `rm` would destroy .*\(150002 paths/, reason);
   });
 });
