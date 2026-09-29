@@ -82,6 +82,7 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | an xargs item that names nothing is nothing to lose | the older rule, that every missing item is unread | red, four tests |
 | a wrapper's option takes its value (`timeout -k`, `flock -w`, `exec -a`, `env --chdir=`) | each option | red, one mutation each |
 | fifteen payloads deep is followed, sixteen is not | the depth raised, the depth lowered | red, one mutation each |
+| five silent losses a round-3 reviewer drove (flags in a variable, a later `git add`, a file a find feeds a shell, an unreadable `env -C`, a submodule whose directory is gone) | each fix | red, one mutation each |
 | a program held in a variable is the program it holds, through a wrapper and in each branch | the expansion, the second peel, each value, the wrapper's prefix, what `before` records | red, one mutation each |
 
 One of them lied first.

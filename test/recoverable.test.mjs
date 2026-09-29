@@ -922,6 +922,13 @@ const LOUD_ROUND_2 = [
   ["if true; then W=sudo; else W=nice; fi; for f in a b c d rm; do $W $f -rf wip; done", { names: /more values than this guard follows/ }],
   // A stash that may run before a drop: the drop may take what it stashed.
   ["true && git stash push -u -q; git stash drop", { names: /src\/mod\.py/ }],
+  // Opus 5, round 3. rm's flags are read after expansion; a later save does not reach back;
+  // a file a find or xargs feeds is not a plainly named one; a directory it cannot read is judged.
+  ["F=-rf; rm $F wip", WIP],
+  ["rm list.txt; rm wip/notes.md; git add -A", { names: /list\.txt, wip\/notes\.md/ }],
+  ["find wip -name notes.md -exec sh -c 'rm \"$1\"' _ {} \\;", { names: /wip\/notes\.md/ }],
+  ["echo wip/notes.md | xargs -I{} sh -c 'rm \"{}\"'", { names: /wip\/notes\.md/ }],
+  ["env -C $UNSET_IN_THIS_CALL rm -rf wip", { names: /whose directory this guard cannot read/ }],
 ];
 
 const QUIET_ROUND_2 = [
@@ -951,6 +958,8 @@ const QUIET_ROUND_2 = [
   "C=command; $C -v rm -rf wip", // a lookup through a variable runs nothing
   "W=sudo; $W git add -A && rm -rf wip", // the add runs under the wrapper, and still saves the files
   "git add -A; rm -rf wip", // a save that certainly ran
+  "git add -A; rm list.txt; rm wip/notes.md", // saved before the deletes
+  "env -C $UNSET_IN_THIS_CALL ls", // a directory it cannot read, and a program that deletes nothing
 ];
 
 describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
@@ -1308,6 +1317,13 @@ describe("the hook: a repository inside the target is read", () => {
     for (let i = 0; i < 20_100; i += 1) mkdirSync(join(tree, "pkgs", "pad", `d${i}`), { recursive: true });
     cloneAt(join(tree, "pkgs", "zdeep", "clone"), "patched.md");
     assert.match((await hook("rm -rf pkgs")).reason, /pkgs\/zdeep\/clone\/patched\.md/);
+  });
+
+  it("reads past a submodule whose directory is gone, and names the real loss", async () => {
+    submodule("vendor/sub", null);
+    rmSync(join(tree, "vendor", "sub"), { recursive: true, force: true });
+    const { reason } = await hook("rm -rf wip vendor");
+    assert.match(reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, reason);
   });
 
   it("asks without naming when there are more repositories below the target than it reads", async () => {

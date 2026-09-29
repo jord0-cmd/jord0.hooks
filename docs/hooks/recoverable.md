@@ -36,7 +36,7 @@ So these stay silent by construction: ignored files (`node_modules/`, `build/`, 
 | `git stash drop`, `git stash clear` | the stash, when it holds anything |
 | `git worktree remove --force` | untracked files and uncommitted edits in that worktree (its commits live in the main tree) |
 
-Deleting one plainly named file on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. A second one anywhere in the same call, and both are judged. So is a glob, a brace list, anything recursive, and every delete a subagent makes.
+Deleting one plainly named file on the main thread is left alone. That is everyday scratch cleanup, and asking about it would get the guard switched off. A second one anywhere in the same call, and both are judged. So is a glob, a brace list, anything recursive, a file a `find` or `xargs` hands to a shell, and every delete a subagent makes. A `git add` after such a delete saves nothing: the file is gone by then.
 
 Inside `.git` nothing is scratch. `.git/index` is one file, and it is the staging area. A delete there, or a `find` that reaches in, is named as git's own data, since `git status` never lists it. `FETCH_HEAD`, `ORIG_HEAD`, `COMMIT_EDITMSG` and `gc.log` are left alone: they record the last operation, and git writes them again. So is a lock at any depth, `index.lock` or `refs/heads/main.lock`. Removing a stale one is the everyday fix after a git that crashed.
 
@@ -58,7 +58,7 @@ Commands are found by tree-sitter's bash grammar, not by splitting text on `;` a
 
 A shell reads a script from more places than `-c`, and each is read: a heredoc (`bash <<'EOF'`, `cat <<'EOF' | bash`, `bash /dev/stdin <<'EOF'`), a here-string, a pipe from `echo`, a `tee` in between, a process substitution (`bash < <(echo …)`). So is `printf` when its format has no `%` and no backslash, and the string `flock` hands to `sh -c`.
 
-Wrapper words are peeled by one table, which all three hooks share: `sudo`, `doas`, `env`, `nice`, `ionice`, `timeout`, `flock`, `taskset`, `stdbuf`, `nohup`, `setsid`, `time`, `command`, `exec`, `builtin`, `busybox`, `chronic`. An option that takes a value takes it here too, so `timeout -k 5 10 rm -rf wip` is an `rm`, and `env -C wip rm -rf deep` runs in `wip`.
+Wrapper words are peeled by one table, which all three hooks share: `sudo`, `doas`, `env`, `nice`, `ionice`, `timeout`, `flock`, `taskset`, `stdbuf`, `nohup`, `setsid`, `time`, `command`, `exec`, `builtin`, `busybox`, `chronic`. An option that takes a value takes it here too, so `timeout -k 5 10 rm -rf wip` is an `rm`, and `env -C wip rm -rf deep` runs in `wip`. When the directory `env -C` names cannot be read, a program that can delete is judged where the command runs. `rm` reads its flags after the shell expands them, so `F=-rf; rm $F wip` is recursive.
 
 A program named by a variable the call set is the program the variable holds: `R=rm; $R -rf wip` is an `rm`, and `W=sudo; $W rm -rf wip` peels the wrapper as if it were written out. A variable that may hold several values, set in a branch or a loop, is judged for each of them.
 
