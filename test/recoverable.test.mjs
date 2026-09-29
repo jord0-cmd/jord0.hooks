@@ -598,7 +598,7 @@ describe("the hook: a malformed payload", () => {
 
 // ─── The whole hook: the shapes the dispatcher must see through ─────────────────────────
 
-async function hook(command, { agent = false, cwd = tree } = {}) {
+async function hook(command, { agent = false, cwd = tree, env = {} } = {}) {
   const payload = {
     session_id: "test",
     hook_event_name: "PreToolUse",
@@ -607,7 +607,7 @@ async function hook(command, { agent = false, cwd = tree } = {}) {
     cwd,
     ...(agent ? { agent_id: "agent-1", agent_type: "general-purpose" } : {}),
   };
-  const result = await runHook("recoverable", payload, { cwd });
+  const result = await runHook("recoverable", payload, { cwd, env });
   assert.equal(result.code, 0, result.stderr);
   return { decision: decisionOf(result.answer), reason: reasonOf(result.answer) };
 }
@@ -728,6 +728,7 @@ const WIP = { names: /wip\/notes\.md/, not: /src\/mod\.py/ };
 const EDIT = { names: /src\/mod\.py/, not: /wip\// };
 const DEEP = { names: /wip\/deep\/plate\.png/, not: /notes\.md|src\/mod\.py/ };
 const FALLBACK = { names: /this guard cannot read|cannot fully parse|more wrappers than this guard follows/ };
+const TOO_DEEP = { names: /nested deeper than this guard follows/ };
 const EXPECT = new Map([
   ["find $(echo wip) -delete", FALLBACK],
   ["git checkout -- src/mod.py", EDIT],
@@ -864,6 +865,20 @@ const LOUD_ROUND_2 = [
   ["git add -A && git reset --hard", { names: /src\/mod\.py.*wip\/|wip\/.*src\/mod\.py/ }],
   // One reason names every loss in the call.
   ["rm -rf wip && git reset --hard", { names: /`rm`: .*wip\/notes\.md.*`git reset --hard`: .*src\/mod\.py/ }],
+  // Wrapper options that take a value, a directory a wrapper names, and a name a wrapper gives.
+  ["env -Cwip rm -rf deep", DEEP],
+  ["env --chdir=wip rm -rf deep", DEEP],
+  ["exec -a x rm -rf wip", WIP],
+  ["timeout -k 5 10 rm -rf wip", WIP],
+  ["flock -w 5 lock rm -rf wip", WIP],
+  // A script on the shell's standard input, a value set at run time, a payload that will not parse.
+  ["bash /dev/stdin <<'EOF'\nrm -rf wip\nEOF", WIP],
+  ["S=build; read S <<< wip; rm -rf $S", FALLBACK],
+  ["eval 'cat <<EOF; rm -rf wip\nbody\nEOF'", FALLBACK],
+  ["git checkout-index --stdin --force < list.txt", EDIT],
+  // Payloads within payloads are followed to the command, up to a depth, and judged where they run past it.
+  [`${"eval ".repeat(15)}rm -rf wip`, WIP],
+  [`${"eval ".repeat(17)}rm -rf wip`, TOO_DEEP],
 ];
 
 const QUIET_ROUND_2 = [
@@ -927,6 +942,112 @@ describe("the hook: round 2 false alarms stay silent", () => {
   });
 });
 
+// Shapes that need more than the tree: a symlink, a second directory, a HOME, a PATH. Each
+// row is [command, where it runs (relative to the tree), what the reason names and must not
+// name, the environment]. `<tree>` and `<parent>` in a command or a value are the fixture's paths.
+//
+//   <parent>/outside/into -> tree/wip/deep      so `into/..` is tree/wip
+//   tree/wiplink          -> tree/wip
+//   tree/build/link       -> tree/wip           an ignored link into the work
+//   <parent>/linked                             a linked worktree holding scratch.txt
+//   <parent>/home                               an empty HOME
+const NOTES = { names: /wip\/notes\.md/, not: /plate|src\/mod\.py/ };
+const SWEPT = { names: /wip\/deep\/plate\.png, wip\/notes\.md/, not: /src\/mod\.py/ };
+const LOUD_ELSEWHERE = [
+  // `..` after a symlink is the parent of where the link points: the kernel resolves an operand.
+  ["rm -rf outside/into/../notes.md", "..", NOTES],
+  ["cd outside/into && rm -rf ../notes.md", "..", NOTES],
+  ["cd wiplink/deep && cd .. && rm -rf deep", ".", DEEP],
+  ["cd -P outside/into && cd .. && rm -rf notes.md", "..", NOTES], // -P: the shell goes where the link points
+  ["cd -LP outside/into && cd .. && rm -rf notes.md", "..", NOTES], // the last of -L and -P wins
+  ["rm -rf build/link/", ".", SWEPT], // a trailing slash names the directory behind the link
+  // A find that walks through a link deletes what is behind it.
+  ["find wiplink/ -type f -delete", ".", SWEPT],
+  ["find -L wiplink -type f -delete", ".", SWEPT],
+  ["find -H wiplink -type f -delete", ".", SWEPT],
+  ["find .. -name notes.md -delete", "src", NOTES], // rooted at the tree, from inside it
+  ["find .. -name notes.md -delete", ".", NOTES], // rooted above every repository: each victim is judged in its own
+  // The repository is named by where the command points, not by where it runs.
+  ["env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["git worktree remove --force linked", ".", { names: /scratch\.txt/, not: /wip\/|src\/mod\.py/ }],
+  ["rm -rf <parent>", "src", { names: /1 commit on no remote.*src\/mod\.py/ }],
+  ["cd; rm -rf wip", "..", WIP, { HOME: "<tree>" }], // a bare cd goes HOME
+];
+
+const QUIET_ELSEWHERE = [
+  ["cd; rm -rf wip", ".", { HOME: "<parent>/home" }], // HOME holds no wip: the rm runs there, not here
+  ["cd outside/into && cd .. && rm -rf notes.md", ".."], // the shell's own `cd ..` is by name: it lands in outside
+  ["cd -P -L outside/into && cd .. && rm -rf notes.md", ".."],
+  ["find wiplink -type f -delete", "."], // find does not follow a link it is handed without a slash
+  ["rm -rf outside/into", ".."], // removes the link, not what it points to
+];
+
+describe("the hook: shapes that need a link, another directory, a HOME or a PATH", () => {
+  let parent;
+  const placed = (text) => text.replaceAll("<tree>", tree).replaceAll("<parent>", parent);
+  const envOf = (env = {}) => Object.fromEntries(Object.entries(env).map(([k, v]) => [k, placed(v)]));
+
+  beforeEach(() => {
+    parent = join(tree, "..");
+    mkdirSync(join(parent, "outside"));
+    mkdirSync(join(parent, "home"));
+    symlinkSync(join(tree, "wip", "deep"), join(parent, "outside", "into"));
+    symlinkSync(join(tree, "wip"), join(tree, "wiplink"));
+    symlinkSync(join(tree, "wip"), join(tree, "build", "link"));
+    gitIn(tree, "worktree", "add", "-q", join(parent, "linked"), "-b", "side");
+    writeFileSync(join(parent, "linked", "scratch.txt"), "mine\n");
+  });
+
+  for (const [command, at, { names, not }, env] of LOUD_ELSEWHERE) {
+    it(`asks: ${JSON.stringify(command)} in ${at}`, async () => {
+      const where = { cwd: join(tree, at), env: envOf(env) };
+      const main = await hook(placed(command), where);
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
+      assert.equal((await hook(placed(command), { ...where, agent: true })).decision, "deny", command);
+    });
+  }
+
+  for (const [command, at, env] of QUIET_ELSEWHERE) {
+    it(`stays silent: ${JSON.stringify(command)} in ${at}`, async () => {
+      const { decision, reason } = await hook(placed(command), { cwd: join(tree, at), env: envOf(env) });
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+
+  it("names the file a find matched, not the files its name would match as a pattern", async () => {
+    writeFileSync(join(tree, "wip", "[n]otes.md"), "named like a pattern\n");
+    const { decision, reason } = await hook("find wip -name '[[]n]otes.md' -delete");
+    assert.equal(decision, "ask");
+    assert.match(reason, /wip\/\[n\]otes\.md \(1 path/, reason);
+  });
+
+  it("names the file xargs was handed: xargs runs no shell, so nothing expands an item", async () => {
+    writeFileSync(join(tree, "wip", "[n]otes.md"), "named like a pattern\n");
+    const { decision, reason } = await hook("echo 'wip/[n]otes.md' | xargs rm -f");
+    assert.equal(decision, "ask");
+    assert.match(reason, /wip\/\[n\]otes\.md \(1 path/, reason);
+  });
+
+  it("never takes xargs' replacement token for a file of that name", async () => {
+    writeFileSync(join(tree, "{}"), "a file named like the token\n");
+    const { decision, reason } = await hook("echo build | xargs -I{} rm -rf {}");
+    assert.equal(decision, "silent", reason);
+  });
+
+  it("asks when git is not on the PATH inside a repository, and denies a subagent", async () => {
+    const bare = join(parent, "node-only");
+    mkdirSync(bare);
+    symlinkSync(process.execPath, join(bare, "node"));
+    const main = await hook("rm -rf wip", { env: { PATH: bare } });
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /could not ask git .*git is not installed/, main.reason);
+    assert.equal((await hook("rm -rf wip", { agent: true, env: { PATH: bare } })).decision, "deny");
+  });
+});
+
 // The documented floors (docs/hooks/recoverable.md, Limits): what this guard cannot know from the
 // text, pinned SILENT. If one of these starts asking, the guard learned something and the Limits
 // page is out of date; if a new floor appears, it belongs here and on that page.
@@ -944,4 +1065,32 @@ describe("the hook: documented floors stay silent", () => {
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
+
+  it("a delete above a submodule does not read the submodule's work tree", async () => {
+    const source = join(tree, "..", "subsrc");
+    mkdirSync(source);
+    gitIn(source, "init", "-q", "-b", "main", ".");
+    writeFileSync(join(source, "a.txt"), "a\n");
+    gitIn(source, "add", "-A");
+    gitIn(source, "commit", "-q", "-m", "base");
+    gitIn(tree, "-c", "protocol.file.allow=always", "submodule", "add", "-q", source, "vendor/sub");
+    gitIn(tree, "commit", "-q", "-m", "submodule");
+    writeFileSync(join(tree, "vendor", "sub", "inflight.md"), "in the submodule\n");
+    assert.equal((await hook("rm -rf vendor")).decision, "silent");
+    // Named itself, the submodule is a repository like any other, and its work is read.
+    assert.match((await hook("rm -rf vendor/sub")).reason, /^RECOVERABLE: `rm` would destroy .*inflight\.md \(1 path/);
+  });
+
+  it("a delete above the repository it runs in does not walk the other repositories below it", async () => {
+    const parent = join(tree, "..");
+    const other = join(parent, "other");
+    mkdirSync(other);
+    gitIn(other, "init", "-q", "-b", "main", ".");
+    writeFileSync(join(other, "theirs.md"), "theirs\n");
+    const swept = await hook(`rm -rf ${parent}`);
+    assert.match(swept.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, swept.reason);
+    assert.doesNotMatch(swept.reason, /theirs\.md/, swept.reason);
+    // Named itself, the other repository is read.
+    assert.match((await hook(`rm -rf ${other}`)).reason, /theirs\.md \(1 path/);
+  });
 });
