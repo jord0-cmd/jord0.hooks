@@ -406,3 +406,61 @@ describe("DONE-GATE, round 2 of review", () => {
     assert.match(await refused([edit("/w/a.py")], "Done. I could not run the migration."), /no test has run since/);
   });
 });
+
+// Round 3's MINORs (Opus 5 alone, #13; the chair, #12), each driven through the hook first.
+describe("DONE-GATE, round 3 MINORs", () => {
+  const refused = async (steps, final = "Done.") => (await verdict(stop(steps, final)))?.feedback ?? "";
+
+  // A claim word inside a name is part of the name: `DONE-GATE`, `fixed-width`, `done-gate.mjs`.
+  for (const final of [
+    "I updated the DONE-GATE hook to read the transcript in order.",
+    "The table now uses a fixed-width font.",
+    "See lib/done-gate.mjs for the logic.",
+    "The completed_tasks table has a new column.",
+    "Here is the complete list of wrappers.",
+    "It is a complete rewrite of the parser.",
+    "Run it with --fixed to keep the old layout.",
+  ]) {
+    it(`reads no claim in: ${final}`, async () => {
+      assert.equal(await refused([edit("/w/lib/done-gate.mjs")], final), "");
+    });
+  }
+  for (const final of ["Done.", "It's fixed.", "The migration is complete.", "The fix is done; the tests pass."]) {
+    it(`still reads the claim in: ${final}`, async () => {
+      assert.match(await refused([edit("/w/lib/done-gate.mjs")], final), /DONE-GATE: your final message says/);
+    });
+  }
+
+  // `bash -o pipefail -c`: the status IS the test run's, so a failure is a failure, not "hidden".
+  for (const command of ["bash -o pipefail -c 'pytest -q | tail -1'", "bash -euo pipefail -c 'pytest -q | tail -1'"]) {
+    it(`reads the shell's own pipefail: ${command}`, async () => {
+      const feedback = await refused([edit("/w/a.py"), bash(command, { output: "Exit code 1\n(trimmed)", error: true })]);
+      assert.match(feedback, /the last test run after your edits failed/);
+      assert.doesNotMatch(feedback, /hides the test run's own status/);
+    });
+  }
+  it("still says a pipe hides the status when no pipefail is on", async () => {
+    const feedback = await refused([edit("/w/a.py"), bash("bash -c 'pytest -q | tail -1'", { output: "Exit code 1\n(trimmed)", error: true })]);
+    assert.match(feedback, /hides the test run's own status/);
+  });
+
+  // An edit is an edit however it lands: a dotenv file, and a copy or move over a source file.
+  for (const [command, what] of [
+    ["echo X=1 > .env", /\.env was edited/],
+    ["echo X=1 >> .env.local", /\.env\.local was edited/],
+    ["cp /tmp/new.py src/app.py", /app\.py was edited/],
+    ["mv /tmp/new.py src/app.py", /app\.py was edited/],
+    ["install -m 644 /tmp/new.py src/app.py", /app\.py was edited/],
+    ["cp /tmp/new.py src/", /new\.py was edited/],
+    ["cp -t src /tmp/a.py /tmp/b.md", /a\.py was edited/],
+  ]) {
+    it(`counts an edit: ${command}`, async () => {
+      assert.match(await refused([bash(command)]), what);
+    });
+  }
+  for (const command of ["cp src/app.py /tmp/backup.bak", "mv notes.md old-notes.md", "cp -r src /tmp/snapshot", "install -m 644 new.py"]) {
+    it(`counts no source edit: ${command}`, async () => {
+      assert.equal(await refused([bash(command)]), "");
+    });
+  }
+});
