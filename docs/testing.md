@@ -76,7 +76,8 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | a printed name is a name and not a pattern | the expansion switched off for what find prints and xargs is handed | red, one mutation each |
 | a submodule's work is read from above it, however deep | the index listing, and the read | red, one mutation each |
 | a clone in an ignored directory is found | the walk | red, four tests |
-| the walk stops at two thousand directories, and thirty-three repositories ask unread | each bound | red, one mutation each |
+| the walk stops at two thousand directories or twenty thousand entries, and thirty-three repositories ask unread | each bound | red, one mutation each |
+| a `.git` is found without reading for it, whatever order the filesystem lists in | the lookup when a listing is cut short | red |
 | one git directory's history is counted once | the count per git directory | red |
 | an xargs item that names nothing is nothing to lose | the older rule, that every missing item is unread | red, four tests |
 | a wrapper's option takes its value (`timeout -k`, `flock -w`, `exec -a`, `env --chdir=`) | each option | red, one mutation each |

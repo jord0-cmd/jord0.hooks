@@ -15,6 +15,7 @@ import { pathToFileURL } from "node:url";
 
 import * as recoverable from "../lib/recoverable/index.mjs";
 import * as judges from "../lib/recoverable/judges.mjs";
+import { listDirectories } from "../lib/recoverable/paths.mjs";
 import { resolveWord } from "../lib/shell.mjs";
 import { ROOT, decisionOf, reasonOf, runHook } from "./helpers/hook.mjs";
 import { gitIn, makeTree } from "./helpers/repo.mjs";
@@ -1218,6 +1219,33 @@ describe("the hook: a repository inside the target is read", () => {
     cloneAt(join(tree, "build", "deep", "a", "b", "clone"), "patched.md");
     assert.equal((await hook("rm -rf build")).decision, "silent");
     assert.match((await hook("rm -rf build/deep")).reason, /build\/deep\/a\/b\/clone\/patched\.md/); // within reach from here
+  });
+
+  it("reads a directory only up to its budget, and finds a `.git` without reading for it", () => {
+    const wide = join(tree, "build", "wide");
+    for (let i = 0; i < 30; i += 1) mkdirSync(join(wide, `d${i}`), { recursive: true });
+    for (let i = 0; i < 5; i += 1) writeFileSync(join(wide, `f${i}`), "");
+    symlinkSync(join(tree, "wip"), join(wide, "link")); // a link to a directory is not a directory to walk
+    writeFileSync(join(wide, ".git"), "gitdir: elsewhere\n");
+    const whole = listDirectories(wide, 1000);
+    assert.equal(whole.read, 37);
+    assert.equal(whole.dirs.length, 30);
+    assert.equal(whole.git, true);
+    const cut = listDirectories(wide, 10);
+    assert.equal(cut.read, 10);
+    assert.ok(cut.dirs.length <= 10);
+    assert.equal(cut.git, true);
+    // Read nothing, and the `.git` is still found: by name, whatever order the filesystem lists in.
+    assert.deepEqual(listDirectories(wide, 0), { dirs: [], read: 0, git: true });
+    assert.deepEqual(listDirectories(join(tree, "no-such-dir"), 10), { dirs: [], read: 0, git: false });
+  });
+
+  // The documented limit: the walk reads 20,000 entries in all, however they are spread.
+  it("does not find a clone past the walk's entry budget", async () => {
+    for (let i = 0; i < 20_100; i += 1) mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
+    cloneAt(join(tree, "build", "zdeep", "clone"), "patched.md");
+    assert.equal((await hook("rm -rf build")).decision, "silent");
+    assert.match((await hook("rm -rf build/zdeep")).reason, /build\/zdeep\/clone\/patched\.md/);
   });
 
   it("asks without naming when there are more repositories below the target than it reads", async () => {

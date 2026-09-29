@@ -156,7 +156,7 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 - A script file is not opened. `bash deploy.sh`, `bash < deploy.sh`, `cat deploy.sh | bash`, `source env.sh` and `curl … | bash` all run text this hook never reads. Neither is a `printf` with a `%` or a backslash in its format: what it prints is decided when it runs.
 - A `cd` into a directory that something other than `mkdir` makes in the same call (`cp -r a b; cd b; rm -rf *`) is judged both ways, in `b` and where the call started. That can ask about a delete that was safe.
 - Fifteen payloads deep is followed, and so are eleven wrapper words. One more of either, and the command is judged by where it runs.
-- The walk for a repository inside a target lists two thousand directories, nearest first, and stops. A clone deeper than that in a very large tree is not found. A submodule is, from the index.
+- The walk for a repository inside a target lists two thousand directories or reads twenty thousand entries, whichever comes first, nearest first, and stops. A clone past that in a very large tree is not found. A submodule is, from the index.
 - It reads thirty-two repositories inside one target. Past that it asks without naming anything, and says why.
 - `xargs` reads quotes and backslashes its own way, and not at all with `-0`. An item under them that names nothing on disk asks, judged by where the command runs, even when `rm` would have found nothing either.
 - On Windows there is no system `find` to dry-run with, so a `find` delete is judged against its whole root instead, the stricter answer. Windows is not claimed.
