@@ -918,6 +918,10 @@ const LOUD_ROUND_2 = [
   ["git switch -f -C hot main", EDIT],
   // More values than the guard follows: judged where it runs, never dropped.
   ["for f in a b c d e f g h rm; do $f -rf wip; done", { names: /more values than this guard follows/ }],
+  // Two expansions that multiply past the limit: a wrapper that may be one of three, a program one of five.
+  ["if true; then W=sudo; else W=nice; fi; for f in a b c d rm; do $W $f -rf wip; done", { names: /more values than this guard follows/ }],
+  // A stash that may run before a drop: the drop may take what it stashed.
+  ["true && git stash push -u -q; git stash drop", { names: /src\/mod\.py/ }],
 ];
 
 const QUIET_ROUND_2 = [
