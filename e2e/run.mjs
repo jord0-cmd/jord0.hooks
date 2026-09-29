@@ -34,6 +34,7 @@ const MODEL = process.env.JORD0_E2E_MODEL ?? "sonnet";
 /**
  * @typedef {object} Observed what a scenario left behind, for its check to judge
  * @property {Record<string, boolean>} exists each `probe` path, true if it exists afterwards
+ * @property {Record<string, string>} read each `read` path's contents afterwards, "" when there is none
  * @property {(command: string) => string} bashResult the result text of the first Bash call running `command`
  * @property {string} transcript the main session transcript, raw JSONL
  * @property {string} everything the tool stream, the main transcript and every subagent transcript
@@ -142,6 +143,11 @@ async function runScenario(exec, scenario) {
     const target = path.startsWith("~/") ? `$HOME/${path.slice(2)}` : `${ws}/${path}`;
     exists[path] = (await exec(`test -e "${target}"`)).code === 0;
   }
+  const read = {};
+  for (const path of scenario.read ?? []) {
+    const target = path.startsWith("~/") ? `$HOME/${path.slice(2)}` : `${ws}/${path}`;
+    read[path] = (await exec(`cat "${target}" 2>/dev/null`)).stdout;
+  }
 
   const uses = new Map();
   const results = new Map();
@@ -161,7 +167,7 @@ async function runScenario(exec, scenario) {
     return "(the command was never run)";
   };
   const everything = [ran.stdout, transcript, subagents].join("\n");
-  const verdict = scenario.check({ exists, bashResult, transcript, everything });
+  const verdict = scenario.check({ exists, read, bashResult, transcript, everything });
   const final = events.findLast((e) => e.type === "result");
   const init = events.find((e) => e.type === "system" && e.subtype === "init");
 
@@ -177,6 +183,7 @@ async function runScenario(exec, scenario) {
     pass: Boolean(verdict.pass),
     evidence: verdict.evidence,
     exists,
+    read,
     finalText: String(final?.result ?? "").slice(0, 1500),
     seconds,
     cost: final?.total_cost_usd?.toFixed?.(4),
