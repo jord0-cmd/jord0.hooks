@@ -1200,8 +1200,8 @@ describe("the hook: a repository inside the target is read", () => {
     assert.equal(main.decision, "ask");
     assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*vendor\/sub\/inflight\.md \(1 path/, main.reason);
     assert.equal((await hook("rm -rf vendor", { agent: true })).decision, "deny");
-    // Named itself, it is read once, as the repository it is.
-    assert.match((await hook("rm -rf vendor/sub")).reason, /work git cannot give back: inflight\.md \(1 path/);
+    // Named itself, it is read once, as the repository it is, and named as the walk above names it.
+    assert.match((await hook("rm -rf vendor/sub")).reason, /work git cannot give back: vendor\/sub\/inflight\.md \(1 path/);
   });
 
   it("counts no history for a submodule: its commits live in the git directory around it", async () => {
@@ -1374,6 +1374,8 @@ const LOUD_MINORS = [
   ["(git add -A &); wait; rm -rf wip", WIP], // a job the subshell orphaned: the outer wait is not its shell's
   ["sh -c 'git add -A' | rm -rf wip", WIP], // a payload's save races its carrier's pipeline too
   ["git add -A & false && wait; rm -rf wip", WIP], // a wait that may not run waits for nothing
+  // The first delete had the save; the second, in another stage, did not (and is judged where it runs).
+  ["(git add -A; rm -rf $X1) | rm -rf $X2", { names: /this guard cannot read.*wip\/notes\.md/ }],
   ["git add -A | rm list.txt; rm wip/notes.md", { names: /list\.txt/ }], // two one-file deletes, one racing the add
   // A program word is followed through eight readings, and at nine is judged where it runs. Two
   // variables multiply: three wrappers by three programs is nine.
@@ -1389,6 +1391,8 @@ const QUIET_MINORS = [
   "git add -A | cat; rm -rf wip", // `;` waits for the whole pipeline
   "(git add -A); rm -rf wip", // a subshell finishes before the next command
   "sh -c 'git add -A' | cat; rm -rf wip", // the carrier's pipeline finished before the rm
+  "(git add -A; rm -rf wip) | cat", // one stage runs in order: the add finished first
+  "sh -c 'git add -A; rm -rf wip' | cat",
 ];
 
 describe("the hook: round 3 MINORs ask, naming what they lose", () => {
@@ -1411,4 +1415,132 @@ describe("the hook: round 3 MINORs' neighbours stay silent", () => {
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
+});
+
+// rm without -r refuses a directory, fed or named (Opus 5 #17).
+const LOUD_MINORS_B = [
+  ["echo wip wip/notes.md | xargs rm", { names: /wip\/notes\.md/, not: /plate\.png/ }],
+  ["echo wip | xargs rm -r", WIP],
+];
+const QUIET_MINORS_B = [
+  "echo wip | xargs rm", // rm: cannot remove 'wip': Is a directory
+  "find wip -maxdepth 0 | xargs rm",
+];
+
+describe("the hook: round 3 MINORs in the judges", () => {
+  for (const [command, { names, not }] of LOUD_MINORS_B) {
+    it(JSON.stringify(command), async () => {
+      const main = await hook(command);
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
+    });
+  }
+  for (const command of QUIET_MINORS_B) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+
+  const repoAt = (dir, name) => {
+    mkdirSync(dir, { recursive: true });
+    gitIn(dir, "init", "-q", "-b", "main", ".");
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-q", "-m", "base");
+    if (name) writeFileSync(join(dir, name), "in flight\n");
+  };
+
+  it("reads past a stray `.git` file inside the target, and names the real loss (Opus 5 #12)", async () => {
+    mkdirSync(join(tree, "wip", "a"));
+    writeFileSync(join(tree, "wip", "a", ".git"), "not a gitfile\n");
+    const main = await hook("rm -rf wip");
+    assert.equal(main.decision, "ask");
+    assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, main.reason);
+  });
+
+  it("reads a directory whose `.git` git will not open from the repository around it", async () => {
+    // Driven, git 2.47: in each directory `git rev-parse` fails (invalid gitfile; a gitdir pointing
+    // nowhere), and the outer repository's status lists the files inside as its own untracked work.
+    // Asked straight at wip/b, the guard was silent and bash deleted wip/b/work.md.
+    for (const [dir, gitfile] of [["a", "not a gitfile\n"], ["b", "gitdir: /nonexistent/x\n"]]) {
+      mkdirSync(join(tree, "wip", dir));
+      writeFileSync(join(tree, "wip", dir, ".git"), gitfile);
+      writeFileSync(join(tree, "wip", dir, "work.md"), "keep\n");
+    }
+    for (const [command, names] of [
+      ["rm -rf wip/a", /wip\/a\/work\.md/],
+      ["rm -rf wip/b", /wip\/b\/work\.md/],
+      ["find wip/b -delete", /wip\/b\/work\.md/],
+      ["rm -rf wip", /wip\/a\/work\.md.*wip\/b\/work\.md/],
+    ]) {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "ask", `${command} → ${decision}`);
+      assert.match(reason, FROM_A_JUDGE, reason);
+      assert.match(reason, names, reason);
+    }
+  });
+
+  it("names a repository deleted by name the way it names one found below the target (chair #10)", async () => {
+    repoAt(join(tree, "build", "sub"), "ndirty.txt");
+    for (const command of ["rm -rf build/sub", "rm -rf build"]) {
+      const { reason } = await hook(command);
+      assert.match(reason, /1 commit on no remote in build\/sub\b/, `${command}: ${reason}`);
+      assert.match(reason, /build\/sub\/ndirty\.txt/, `${command}: ${reason}`);
+    }
+    const { reason } = await hook("rm -f build/sub/ndirty.txt build/sub/a.txt");
+    assert.match(reason, /build\/sub\/ndirty\.txt/, reason);
+    for (const command of ["find build/sub -delete", "find build/sub -name ndirty.txt -delete"]) {
+      const found = await hook(command);
+      assert.match(found.reason, /build\/sub\/ndirty\.txt/, `${command}: ${found.reason}`);
+    }
+    // A repository inside one named by name: named from the same place again.
+    repoAt(join(tree, "build", "sub", "deeper"), "d.txt");
+    assert.match((await hook("rm -rf build/sub")).reason, /build\/sub\/deeper\/d\.txt/);
+  });
+
+  it("says so when the search for repositories stopped before the end (chair #7)", async () => {
+    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "build", "many", `d${String(i).padStart(4, "0")}`), { recursive: true });
+    const cut = await hook("rm -rf build wip");
+    assert.match(cut.reason, /^RECOVERABLE: .*wip\/notes\.md.*reached its limit \(2000 directories, 20000 entries\)/s, cut.reason);
+    const whole = await hook("rm -rf wip");
+    assert.doesNotMatch(whole.reason, /reached its limit/, whole.reason);
+    // Two deletes in one call, one of them cut short: the merged reason still says so.
+    const two = await hook("rm -rf build wip; rm -rf src");
+    assert.match(two.reason, /src\/mod\.py.*reached its limit \(2000 directories, 20000 entries\)/s, two.reason);
+  });
+
+  it("says so when the search ran out of entries to read in one wide directory (chair #7)", async () => {
+    const flat = join(tree, "wip", "flat");
+    mkdirSync(flat);
+    for (let i = 0; i < 20_001; i += 1) writeFileSync(join(flat, `f${i}`), "");
+    const { reason } = await hook("rm -rf wip");
+    assert.match(reason, /reached its limit \(2000 directories, 20000 entries\)/, reason.slice(-300));
+  });
+
+  it("asks git each question once per Bash call (Opus 5 #14)", async () => {
+    const trace = join(tree, "..", "git-trace");
+    const env = { GIT_TRACE: trace };
+    // Three judges, three different questions of one place: one git status answers all of them.
+    const { decision } = await hook("rm -rf $X1; find $X2 -delete; echo $X3 | xargs rm -rf", { env });
+    assert.equal(decision, "ask");
+    const statuses = readFileSync(trace, "utf8").split("\n").filter((l) => / built-in: git (?:\S+ )*status /.test(l));
+    assert.equal(statuses.length, 1, statuses.join("\n"));
+  });
+
+  it("answers 150 unreadable deletes on a 2,000-directory tree well inside its budget (Opus 5 #14)", async () => {
+    // Driven before the fix: 60 took 6 s, 100 went over the 8 s budget. After it: 150 in 0.25 s.
+    for (let i = 0; i < 2000; i += 1) {
+      const dir = join(tree, "wip", "many", `d${i}`);
+      mkdirSync(dir, { recursive: true });
+      for (let j = 0; j < 10; j += 1) writeFileSync(join(dir, `f${j}`), "");
+    }
+    const command = Array.from({ length: 150 }, (_, i) => `rm -rf $X${i}`).join("; ");
+    const started = Date.now();
+    const { decision } = await hook(command);
+    assert.equal(decision, "ask");
+    assert.ok(Date.now() - started < 1500, `${Date.now() - started} ms`);
+  });
 });
