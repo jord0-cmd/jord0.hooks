@@ -599,7 +599,10 @@ describe("the hook: a malformed payload", () => {
 
 // ─── The whole hook: the shapes the dispatcher must see through ─────────────────────────
 
+// CDPATH empty unless a test sets it: the hook reads it from its environment, and a developer's own
+// exported CDPATH would otherwise change where every `cd` in this file goes.
 async function hook(command, { agent = false, cwd = tree, env = {} } = {}) {
+  env = { CDPATH: "", ...env };
   const payload = {
     session_id: "test",
     hook_event_name: "PreToolUse",
@@ -1586,4 +1589,49 @@ describe("the hook: round 3 MINORs in the wrapper table", () => {
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
+});
+
+// cd, as bash takes it (Opus 5 #16, chair #9). Driven in bash 5.2: a relative target not written
+// `./…` or `../…` is looked for along CDPATH, in order (an empty entry is the current directory), and
+// the current directory only when none has it; a directory without search permission refuses the cd.
+describe("the hook: round 3 MINORs in cd", () => {
+  for (const [command, env] of [
+    ["CDPATH=wip; cd deep && rm -rf *", {}],
+    ["export CDPATH=wip; cd deep && rm -rf *", {}],
+    ["CDPATH=:wip; cd deep && rm -rf *", {}], // the current directory first: no deep there, so wip/deep
+    ["CDPATH=nope:wip; cd deep && rm -rf *", {}], // an entry with no match is passed over
+    ["cd deep && rm -rf *", { CDPATH: "wip" }], // exported to the session: the hook's own environment
+  ]) {
+    it(`follows CDPATH: ${command}${env.CDPATH ? " (CDPATH=wip in the environment)" : ""}`, async () => {
+      const main = await hook(command, { env });
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, /^RECOVERABLE: .*wip\/deep\/plate\.png/, main.reason);
+    });
+  }
+  it("takes the first CDPATH entry that has the target, not a later one", async () => {
+    mkdirSync(join(tree, "x", "deep"), { recursive: true });
+    writeFileSync(join(tree, "x", "deep", "first.md"), "x\n");
+    const { reason } = await hook("CDPATH=x:wip; cd deep && rm -rf *");
+    assert.match(reason, /x\/deep\/first\.md/, reason);
+    assert.doesNotMatch(reason, /plate\.png/, reason);
+  });
+  it("falls back to the current directory when no CDPATH entry has the target", async () => {
+    assert.match((await hook("CDPATH=nope; cd wip && rm -rf deep")).reason, /wip\/deep\/plate\.png/);
+  });
+  it("leaves CDPATH out of `./` and `../` targets", async () => {
+    assert.equal((await hook("CDPATH=wip; cd ./deep && rm -rf *")).decision, "silent");
+  });
+  it("reads a cd into a directory it cannot search as a cd that may fail", async () => {
+    mkdirSync(join(tree, "sibling"));
+    chmodSync(join(tree, "sibling"), 0o000);
+    try {
+      // bash: cd sibling fails (Permission denied), cd wip runs, wip/notes.md is deleted. As root,
+      // the cd succeeds and nothing is lost, so the right answer depends on who asks.
+      const { decision, reason } = await hook("cd sibling || cd wip; rm -rf notes.md");
+      if (process.getuid?.() === 0) assert.equal(decision, "silent", reason);
+      else assert.match(reason, /^RECOVERABLE: .*wip\/notes\.md/, `${decision}: ${reason}`);
+    } finally {
+      chmodSync(join(tree, "sibling"), 0o755);
+    }
+  });
 });
