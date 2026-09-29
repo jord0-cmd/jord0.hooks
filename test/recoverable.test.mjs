@@ -1345,3 +1345,70 @@ describe("the hook: a very large dirty tree", () => {
     assert.match(reason, /^RECOVERABLE: `rm` would destroy .*\(150002 paths/, reason);
   });
 });
+
+// Round 3's MINORs (Opus 5 alone, and the chair), each driven through the hook before it was fixed
+// (`round3-tools/probe19.mjs`). A chain of functions: `f0(){ f1; }; …; f{n-1}(){ rm -rf wip; }; f0`.
+const functionChain = (n) =>
+  `${Array.from({ length: n }, (_, i) => (i === n - 1 ? `f${i}(){ rm -rf wip; }` : `f${i}(){ f${i + 1}; }`)).join("; ")}; f0`;
+const NARROW = { names: /whose directory this guard cannot narrow down.*wip\/notes\.md/ };
+
+const LOUD_MINORS = [
+  // Function calls stop where payloads stop, fifteen deep, and say so past it (Opus 5 #8).
+  [functionChain(15), WIP],
+  [functionChain(16), TOO_DEEP],
+  [functionChain(17), TOO_DEEP],
+  // Three cds that may fail and one that may not leave sixteen places, more than it keeps (Opus 5
+  // #10). bash runs the rm in wip; the dropped place must not be the silent one.
+  ["cd n1; cd n2; cd n3; cd wip; rm -rf notes.md", NARROW],
+  ["cd n1; cd n2; cd n3; cd wip; f(){ rm -rf notes.md; }; f", NARROW],
+  ["cd n1; cd n2; cd n3; cd wip; cd deep; rm -rf ../notes.md", NARROW],
+  // A save that races the delete saves nothing. Driven in bash: `git add -A | rm -rf wip` over
+  // 3,000 files staged none of them ("unable to stat"), and a background add races the same way.
+  ["git add -A | rm -rf wip", WIP],
+  ["git add -A & rm -rf wip", WIP],
+  ["(git add -A &); rm -rf wip", WIP], // the subshell exits at once, its job still running
+  ["sh -c 'git add -A' & rm -rf wip", WIP],
+  ["git stash push -u -q | rm -rf wip", WIP],
+  ["git add -A & sleep 1 & wait $!; rm -rf wip", WIP], // `$!` is the sleep: the add was not waited for
+  ["git add -A & wait -n; rm -rf wip", WIP], // one job, and which one is not knowable
+  ["(git add -A &); wait; rm -rf wip", WIP], // a job the subshell orphaned: the outer wait is not its shell's
+  ["sh -c 'git add -A' | rm -rf wip", WIP], // a payload's save races its carrier's pipeline too
+  ["git add -A & false && wait; rm -rf wip", WIP], // a wait that may not run waits for nothing
+  ["git add -A | rm list.txt; rm wip/notes.md", { names: /list\.txt/ }], // two one-file deletes, one racing the add
+  // A program word is followed through eight readings, and at nine is judged where it runs. Two
+  // variables multiply: three wrappers by three programs is nine.
+  ["for W in sudo nice; do for f in a b c rm; do $W $f -rf wip; done; done", WIP],
+  ["for W in sudo nice nohup; do for f in a b rm; do $W $f -rf wip; done; done", { names: /more values than this guard follows/ }],
+];
+
+const QUIET_MINORS = [
+  "cd n1; cd n2; cd n3; cd wip; ls", // too many places, and a program that deletes nothing
+  "cd n1; cd n2; cd n3; cd wip; cd /; rm -rf wip", // one place again: / has no wip
+  "git add -A & wait; rm -rf wip", // the shell waited for its jobs: the add finished first
+  "git add -A & wait $!; rm -rf wip", // `$!` is the job just sent off: the add
+  "git add -A | cat; rm -rf wip", // `;` waits for the whole pipeline
+  "(git add -A); rm -rf wip", // a subshell finishes before the next command
+  "sh -c 'git add -A' | cat; rm -rf wip", // the carrier's pipeline finished before the rm
+];
+
+describe("the hook: round 3 MINORs ask, naming what they lose", () => {
+  for (const [command, { names, not }] of LOUD_MINORS) {
+    it(JSON.stringify(command.length > 90 ? `${command.slice(0, 87)}...` : command), async () => {
+      const main = await hook(command);
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, FROM_A_JUDGE, main.reason);
+      assert.match(main.reason, names, main.reason);
+      if (not) assert.doesNotMatch(main.reason, not, main.reason);
+      assert.equal((await hook(command, { agent: true })).decision, "deny", command);
+    });
+  }
+});
+
+describe("the hook: round 3 MINORs' neighbours stay silent", () => {
+  for (const command of QUIET_MINORS) {
+    it(JSON.stringify(command), async () => {
+      const { decision, reason } = await hook(command);
+      assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
+    });
+  }
+});
