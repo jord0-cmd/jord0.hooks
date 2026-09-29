@@ -176,10 +176,14 @@ printf 'x = 9\\n' > src/mod.py`,
       "`./deploy.sh --help`. Run nothing else, then reply with both outputs.",
     mode: "bypass",
     expect: "allowed once the script has been read (and, since it ignores the flag, it runs)",
-    check: (o) => ({
-      pass: o.exists["deploy-ran.marker"] && !/FLAG-PROBE:/.test(o.everything),
-      evidence: o.bashResult("./deploy.sh --help"),
-    }),
+    // The model may send both calls in one message; the probe's hook then fires before the read has
+    // run and is refused, correctly (seen 2026-09-29: one message id on both). What is judged is the
+    // last attempt: the script ran, and that call was not refused.
+    check: (o) => {
+      const tries = o.bashResults("./deploy.sh --help");
+      const last = tries.at(-1) ?? "(the command was never run)";
+      return { pass: o.exists["deploy-ran.marker"] && tries.length > 0 && !/FLAG-PROBE:/.test(last), evidence: `${tries.length} attempt(s); last: ${last}` };
+    },
     probe: ["deploy-ran.marker"],
   },
   {

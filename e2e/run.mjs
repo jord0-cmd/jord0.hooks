@@ -36,6 +36,7 @@ const MODEL = process.env.JORD0_E2E_MODEL ?? "sonnet";
  * @property {Record<string, boolean>} exists each `probe` path, true if it exists afterwards
  * @property {Record<string, string>} read each `read` path's contents afterwards, "" when there is none
  * @property {(command: string) => string} bashResult the result text of the first Bash call running `command`
+ * @property {(command: string) => string[]} bashResults the result text of every Bash call running `command`, in order
  * @property {string} transcript the main session transcript, raw JSONL
  * @property {string} everything the tool stream, the main transcript and every subagent transcript
  */
@@ -157,6 +158,15 @@ async function runScenario(exec, scenario) {
       if (block.type === "tool_result") results.set(block.tool_use_id, { isError: block.is_error === true, text: textOf(block.content) });
     }
   }
+  const bashResults = (command) => {
+    const out = [];
+    for (const [id, text] of uses) {
+      if (text.trim() !== command && !text.includes(command)) continue;
+      const r = results.get(id);
+      out.push(r ? `${r.isError ? "[error] " : ""}${r.text}`.slice(0, 1200) : "(no result recorded)");
+    }
+    return out;
+  };
   const bashResult = (command) => {
     for (const [id, text] of uses) {
       if (text.trim() === command || text.includes(command)) {
@@ -167,7 +177,7 @@ async function runScenario(exec, scenario) {
     return "(the command was never run)";
   };
   const everything = [ran.stdout, transcript, subagents].join("\n");
-  const verdict = scenario.check({ exists, read, bashResult, transcript, everything });
+  const verdict = scenario.check({ exists, read, bashResult, bashResults, transcript, everything });
   const final = events.findLast((e) => e.type === "result");
   const init = events.find((e) => e.type === "system" && e.subtype === "init");
 
