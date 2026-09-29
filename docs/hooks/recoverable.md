@@ -60,6 +60,8 @@ A shell reads a script from more places than `-c`, and each is read: a heredoc (
 
 Wrapper words are peeled by one table, which all three hooks share: `sudo`, `doas`, `env`, `nice`, `ionice`, `timeout`, `flock`, `taskset`, `stdbuf`, `nohup`, `setsid`, `time`, `command`, `exec`, `builtin`, `busybox`, `chronic`. An option that takes a value takes it here too, so `timeout -k 5 10 rm -rf wip` is an `rm`, and `env -C wip rm -rf deep` runs in `wip`.
 
+A program named by a variable the call set is the program the variable holds: `R=rm; $R -rf wip` is an `rm`, and `W=sudo; $W rm -rf wip` peels the wrapper as if it were written out. A variable that may hold several values, set in a branch or a loop, is judged for each of them.
+
 `find … -exec sh -c '…' {} \;` and `xargs sh -c '…'` run a shell for each match. The find is dry-run, and the payload is read with the real matches standing in for `{}`, `$0` and `$@`. `xargs git …` and `find … -exec git …` go to the git judge, with a path it cannot read.
 
 `xargs` itself runs no shell. An item is a name, and a `*` in it is a character. An item that names nothing on disk is nothing to lose, and the rest are judged.
@@ -152,7 +154,7 @@ Outside git it says nothing, so it does nothing for work that was never in a rep
 It raises the floor against a tidy-minded agent. It is not a sandbox against an adversary.
 
 - `mv`, `python -c "shutil.rmtree(…)"`, a redirect over a file, and a Write over an edited file are outside its question.
-- It reads the program a command names. A name built at run time is not read: `R=rm; $R -rf wip`, `eval "$(echo rm -rf wip)"`, `$(which rm) -rf wip`. Reaching those is the adversary this hook is not built to stop.
+- It reads the program a command names, and one held in a variable the same call set. A name decided when the command runs is not read: `$(which rm) -rf wip`, `eval "$(echo rm -rf wip)"`, a variable set by `read`, a variable that may or may not be empty. Reaching those is the adversary this hook is not built to stop.
 - A script file is not opened. `bash deploy.sh`, `bash < deploy.sh`, `cat deploy.sh | bash`, `source env.sh` and `curl … | bash` all run text this hook never reads. Neither is a `printf` with a `%` or a backslash in its format: what it prints is decided when it runs.
 - A `cd` into a directory that something other than `mkdir` makes in the same call (`cp -r a b; cd b; rm -rf *`) is judged both ways, in `b` and where the call started. That can ask about a delete that was safe.
 - Fifteen payloads deep is followed, and so are eleven wrapper words. One more of either, and the command is judged by where it runs.

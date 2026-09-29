@@ -889,6 +889,20 @@ const LOUD_ROUND_2 = [
   ["echo wip does-not-exist | xargs rm -rf", WIP],
   ["echo \"'wi p'\" | xargs rm -rf", FALLBACK],
   ["echo 'wi\\ p' | xargs -I{} rm -rf {}", FALLBACK],
+  // A program named by a variable the call set: the shell runs what the variable holds.
+  ["R=rm; $R -rf wip", WIP],
+  ["R=rm; ${R} -rf wip", WIP],
+  ["export R=rm; $R -rf wip", WIP],
+  ["R='rm -rf'; $R wip", WIP], // an unquoted expansion splits: the flags come with it
+  ["R=rm; sudo $R -rf wip", WIP],
+  ["W=sudo; $W rm -rf wip", WIP], // a wrapper in a variable is still a wrapper
+  ["W=sudo; R=rm; $W $R -rf wip", WIP],
+  ["G=git; $G checkout -- src/mod.py", EDIT],
+  ["F=find; $F wip -delete", WIP],
+  ["X=xargs; echo wip | $X rm -rf", WIP],
+  ["S=bash; $S -c 'rm -rf wip'", WIP],
+  ["if true; then R=rm; else R=ls; fi; $R -rf wip", WIP], // either may run: each is judged
+  ["for p in ls rm; do $p -rf wip; done", WIP],
 ];
 
 const QUIET_ROUND_2 = [
@@ -909,6 +923,14 @@ const QUIET_ROUND_2 = [
   "echo 'wi*' | xargs rm -rf", // xargs runs no shell: the `*` is a character, and no file has it
   "xargs -0 rm -rf <<< \"'wip'\"", // with -0 a quote is a character too
   'for d in build node_modules; do rm -rf "$d"; done',
+  "R=ls; $R -rf wip",
+  "R=rm; R=ls; $R -rf wip", // the value it holds when it runs
+  "(R=rm); $R -rf wip", // set in a subshell, gone after it
+  "R=rm; echo $R -rf wip", // a mention
+  "R=rm; $R -f list.txt", // one file, plainly named, on the main thread
+  "G=git; $G add -A && rm -rf wip", // the add, read through its variable, put the files in the index
+  "C=command; $C -v rm -rf wip", // a lookup through a variable runs nothing
+  "W=sudo; $W git add -A && rm -rf wip", // the add runs under the wrapper, and still saves the files
 ];
 
 describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
@@ -993,6 +1015,7 @@ const LOUD_ELSEWHERE = [
   ["find .. -name notes.md -delete", ".", NOTES], // rooted above every repository: each victim is judged in its own
   // The repository is named by where the command points, not by where it runs.
   ["env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  ["G=git; env GIT_DIR=tree/.git GIT_WORK_TREE=tree $G clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
   ["git worktree remove --force linked", ".", { names: /scratch\.txt/, not: /wip\/|src\/mod\.py/ }],
   ["rm -rf <parent>", "src", { names: /back: 1 commit on no remote, and src\/mod\.py/ }],
   ["cd; rm -rf wip", "..", WIP, { HOME: "<tree>" }], // a bare cd goes HOME
@@ -1097,7 +1120,8 @@ describe("the hook: shapes that need a link, another directory, a HOME or a PATH
 const FLOORS = [
   "$(echo rm) -rf wip", // a program name the text does not spell
   "$(which rm) -rf wip",
-  "R=rm; $R -rf wip", // nor one held in a variable
+  "read R <<< rm; $R -rf wip", // nor one a variable takes when the command runs
+  "$UNSET_IN_THIS_CALL rm -rf wip", // nor a word that may or may not expand to nothing
   "bash script.sh", // a script file handed to a shell: it is on disk, holds `rm -rf wip`, and is not opened
   "bash < script.sh",
   "cat script.sh | bash",
