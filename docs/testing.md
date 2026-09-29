@@ -84,6 +84,21 @@ A test that cannot fail proves nothing, and it looks exactly like one that can. 
 | fifteen payloads deep is followed, sixteen is not | the depth raised, the depth lowered | red, one mutation each |
 | five silent losses a round-3 reviewer drove (flags in a variable, a later `git add`, a file a find feeds a shell, an unreadable `env -C`, a submodule whose directory is gone) | each fix | red, one mutation each |
 | a program held in a variable is the program it holds, through a wrapper and in each branch | the expansion, the second peel, each value, the wrapper's prefix, what `before` records | red, one mutation each |
+| a save in the delete's own pipeline, or in an `&` job nobody waited for, saves nothing | the stage rule, the job rule, `wait` and `wait $!` | red, one mutation each |
+| past eight possible directories after `cd`s, a delete is judged across the directory they share | the overflow, and ending it on a sure `cd` | red, one mutation each |
+| function calls stop fifteen deep, as payloads do, and say so | the depth check | red, two tests |
+| a directory whose `.git` git will not open is read from the repository around it | the climb, for a junk file and a dangling `gitdir:` | red, one mutation each |
+| `echo wip \| xargs rm` asks about no directory | the `-r` rule on fed items | red |
+| a repository is named one way, however the delete reaches it | the name from the repository the command runs in | red, one mutation each |
+| each git question is asked once per call | the per-call memo | red: three `git status` calls in the trace, and 150 deletes over 1.5 s |
+| a submodule's unrecorded commits are no loss above it | reading it as the submodule | red |
+| `env -S 'rm\_-rf\_wip'` is an `rm`, and a string env refuses runs nothing | the `env -S` decoder | red, five mutations |
+| `numactl`, `unshare`, `strace` and `chrt` are wrappers, and `unshare -w` moves the command | the table rows, the directory and environment options | red, one mutation each |
+| `CDPATH` is followed, first entry first | the search along it | red, one mutation each |
+| a `cd` into a directory it cannot search may fail | the search permission check | red |
+| `DONE-GATE`, `fixed-width` and `lib/done-gate.mjs` are names, not claims | the name boundary on each side | red, one mutation each |
+| `bash -o pipefail -c 'pytest \| tail'` owns its exit status | the shell's own pipefail | red, three mutations |
+| `cp`, `mv`, `install` and a write into `.env` are edits | the copy rule and the dotenv rule | red, one mutation each |
 
 One of them lied first.
 

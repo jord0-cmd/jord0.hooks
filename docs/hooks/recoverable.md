@@ -48,6 +48,8 @@ It asks when it can name the work a command loses.
 
 It asks when a command certainly deletes and only its target cannot be read: `rm -rf $DIR/cache` with `DIR` unset, `git checkout -- $(git diff --name-only)`. An unreadable word is not a word that names nothing. For `rm` and `find` the question moves to where the command runs, and covers the uncommitted work there. Never the commits: nothing in the command names `.git`. For git, the flags decide first which loss it is, and the unreadable path stands for the whole tree.
 
+It stays silent after a save. A `git add` or `git stash push` earlier in the same call puts the files in git's keeping, and a later delete of them loses nothing: `git add -A && rm -rf wip`, `git add -A; rm -rf wip`. Only a save that certainly ran, and finished, counts. One behind `&&` or `||`, in an `if`, or in a function called that way may not run. One in another stage of the delete's own pipeline runs at the same moment as the delete. So does one sent off with `&`. Driven: `git add -A | rm -rf wip` staged none of three thousand files. A bare `wait`, or `wait $!` for the last job, in the shell that sent the job off, waits for it. A save after the delete stages the deletion, not the bytes.
+
 It stays silent when the program itself cannot be known from the text. A name built at run time. A script file handed to a shell. Asking there would mean asking about every command it cannot read, and a guard that asks about everything gets switched off.
 
 Everything the text does say is read.
@@ -58,7 +60,7 @@ Commands are found by tree-sitter's bash grammar, not by splitting text on `;` a
 
 A shell reads a script from more places than `-c`, and each is read: a heredoc (`bash <<'EOF'`, `cat <<'EOF' | bash`, `bash /dev/stdin <<'EOF'`), a here-string, a pipe from `echo`, a `tee` in between, a process substitution (`bash < <(echo …)`). So is `printf` when its format has no `%` and no backslash, and the string `flock` hands to `sh -c`.
 
-Wrapper words are peeled by one table, which all three hooks share: `sudo`, `doas`, `env`, `nice`, `ionice`, `timeout`, `flock`, `taskset`, `stdbuf`, `nohup`, `setsid`, `time`, `command`, `exec`, `builtin`, `busybox`, `chronic`. An option that takes a value takes it here too, so `timeout -k 5 10 rm -rf wip` is an `rm`, and `env -C wip rm -rf deep` runs in `wip`. When the directory `env -C` names cannot be read, a program that can delete is judged where the command runs. `rm` reads its flags after the shell expands them, so `F=-rf; rm $F wip` is recursive.
+Wrapper words are peeled by one table, which all three hooks share: `sudo`, `doas`, `env`, `nice`, `ionice`, `timeout`, `flock`, `taskset`, `stdbuf`, `nohup`, `setsid`, `time`, `command`, `exec`, `builtin`, `busybox`, `chronic`, `numactl`, `unshare`, `strace`, `chrt`. An option that takes a value takes it here too, so `timeout -k 5 10 rm -rf wip` is an `rm`, and `env -C wip rm -rf deep` and `unshare -w wip rm -rf deep` run in `wip`. `strace -E NAME=value` sets the command's environment, as `env` does. `env -S` splits its string as GNU env does. `\_` separates words and `\c` ends the string. A `#` that starts a word starts a comment. A string env refuses, with an escape it does not know or a quote left open, runs nothing. When the directory `env -C` names cannot be read, a program that can delete is judged where the command runs. `rm` reads its flags after the shell expands them, so `F=-rf; rm $F wip` is recursive.
 
 A program named by a variable the call set is the program the variable holds: `R=rm; $R -rf wip` is an `rm`, and `W=sudo; $W rm -rf wip` peels the wrapper as if it were written out. A variable that may hold several values, set in a branch or a loop, is judged for each of them.
 
@@ -73,6 +75,10 @@ Some valid bash will not parse. `cat <<EOF; rm -rf wip` is one. It deletes, and 
 `cd wip && rm -rf deep` is judged in `wip`. The guard follows `cd`, `cd -`, a bare `cd` to `HOME`, `pushd` and `popd`.
 
 A `cd` the shell may not take leaves both places in play: the right side of `&&` or `||`, the body of an `if` or a loop, a target that is not on disk. A later delete is judged in each, because judging both never misses. After `cd wip && …` only `wip` counts, since `&&` runs what follows only when the `cd` worked. A directory that `mkdir` made earlier in the same call is there.
+
+A `cd` into a directory this user cannot search fails, so it is a `cd` the shell may not take too.
+
+With `CDPATH` set, in the call or in the session's environment, a relative target not written `./…` or `../…` is looked for along it first, as bash does. The first entry that has it wins. An empty entry is the current directory. Otherwise the current directory is tried last. `CDPATH=wip; cd deep` lands in `wip/deep`. Driven on bash 5.2.
 
 A `cd` inside `( … )`, a pipeline stage or an `&` job moves nothing outside it.
 
@@ -90,9 +96,13 @@ A `find` that walks through a link (`find link/`, `-L`, `-H`) deletes what is be
 
 `git status` says nothing about work inside another repository. A submodule's uncommitted files. A clone sitting in an ignored `build/`. A second project under the directory being deleted. So a delete looks for them, and asks each one as the repository it is, under its own config, with the same pins.
 
-Submodules come from the index, however deep they sit. Nothing is walked for them. Everything else comes from a walk below the target, nearest first.
+Submodules come from the index, however deep they sit. Nothing is walked for them. Everything else comes from a walk below the target, by depth, and within one depth in the order the directory lists them.
 
-A submodule's commits live in the git directory of the repository around it, so deleting its work tree loses no history. A linked worktree shares one git directory with its main tree, and that history is counted once.
+A repository is named from the repository the command runs in, however the delete reaches it: `rm -rf build` and `rm -rf build/sub` both name `build/sub/x.txt`.
+
+A submodule's commits live in the git directory of the repository around it, so deleting its work tree loses no history, and commits the superproject has not recorded yet are no loss either. A linked worktree shares one git directory with its main tree, and that history is counted once.
+
+A directory whose `.git` git will not open, a stray file or a `gitdir:` that points nowhere, is not a repository. git refuses to run there, and the repository around it lists the files inside as its own. Driven on git 2.47.
 
 ## Asking git safely
 
@@ -157,8 +167,14 @@ It raises the floor against a tidy-minded agent. It is not a sandbox against an 
 - It reads the program a command names, and one held in a variable the same call set. A name decided when the command runs is not read: `$(which rm) -rf wip`, `eval "$(echo rm -rf wip)"`, a variable set by `read`, a variable that may or may not be empty. Reaching those is the adversary this hook is not built to stop.
 - A script file is not opened. `bash deploy.sh`, `bash < deploy.sh`, `cat deploy.sh | bash`, `source env.sh` and `curl … | bash` all run text this hook never reads. Neither is a `printf` with a `%` or a backslash in its format: what it prints is decided when it runs.
 - A `cd` into a directory that something other than `mkdir` makes in the same call (`cp -r a b; cd b; rm -rf *`) is judged both ways, in `b` and where the call started. That can ask about a delete that was safe.
-- Fifteen payloads deep is followed, and so are eleven wrapper words. One more of either, and the command is judged by where it runs.
-- The walk for a repository inside a target lists two thousand directories or reads twenty thousand entries, whichever comes first, nearest first, and stops. A clone past that in a very large tree is not found. A submodule is, from the index.
+- Fifteen payloads or function calls deep is followed, and so are eleven wrapper words. One more of either, and the command is judged by where it runs.
+- A program word is followed through eight readings: a variable that may hold several programs, times a wrapper that may be several. At nine the command is judged by where it runs.
+- After `cd`s that may fail, eight directories a command may be running in are kept. Past that, a command that can delete is judged across the directory they all lie under. That can ask about a delete that was safe.
+- `CDPATH` is read from the call and from the environment the hook runs in. One set in a shell startup file and not exported is not seen, and one this guard cannot read leaves the tracked directory where it was.
+- `unshare -R DIR` runs the command under a new root. A relative path is read from `DIR`. An absolute one is read as it is outside the new root.
+- The walk for a repository inside a target lists two thousand directories or reads twenty thousand entries, whichever comes first, and stops. A clone past that in a very large tree is not found. A submodule is, from the index. When the hook asks anyway, its reason says the search reached its limit.
+- Deleting a submodule's git directory (`.git/modules/<name>`) asks, naming git's own data. The commits inside it are not counted one by one.
+- A save inside a function the call runs on every path still asks: every command in a function body is read as one that may not run.
 - It reads thirty-two repositories inside one target. Past that it asks without naming anything, and says why.
 - `xargs` reads quotes and backslashes its own way, and not at all with `-0`. An item under them that names nothing on disk asks, judged by where the command runs, even when `rm` would have found nothing either.
 - On Windows there is no system `find` to dry-run with, so a `find` delete is judged against its whole root instead, the stricter answer. Windows is not claimed.
