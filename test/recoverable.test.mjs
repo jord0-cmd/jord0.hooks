@@ -1424,6 +1424,17 @@ describe("the hook: round 3 MINORs ask, naming what they lose", () => {
       assert.equal((await hook(command, { agent: true })).decision, "deny", command);
     });
   }
+
+  // Too many places end when a cd names one place again: the delete is judged there, by name. `cd /`
+  // alone cannot show it (nothing under / is lost either way), so this cd goes back into the tree.
+  it("a cd to one certain place ends the overflow", async () => {
+    const command = `cd n1; cd n2; cd n3; cd wip; cd '${tree}'; rm -rf wip`;
+    const main = await hook(command);
+    assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+    assert.match(main.reason, WIP.names, main.reason);
+    assert.doesNotMatch(main.reason, WIP.not, main.reason);
+    assert.doesNotMatch(main.reason, /cannot narrow down/, main.reason);
+  });
 });
 
 describe("the hook: round 3 MINORs' neighbours stay silent", () => {
