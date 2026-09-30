@@ -7,8 +7,8 @@
 // every scenario in e2e/scenarios.mjs through `claude -p`. What happened is read back from the
 // tool stream, the transcript and the disk, and written to e2e/report/.
 //
-//   npm run e2e                       token from $CLAUDE_CODE_OAUTH_TOKEN or
-//                                     ~/.config/jord0-hooks-e2e/token (make one: claude setup-token)
+//   npm run e2e                       token from $CLAUDE_CODE_OAUTH_TOKEN, or from
+//                                     ~/.config/jord0-hooks-e2e/token (`claude setup-token`)
 //   npm run e2e -- R1 F1              only those scenarios
 //
 // The token reaches the container as an environment variable only. It is never written to
@@ -34,9 +34,12 @@ const MODEL = process.env.JORD0_E2E_MODEL ?? "sonnet";
 /**
  * @typedef {object} Observed what a scenario left behind, for its check to judge
  * @property {Record<string, boolean>} exists each `probe` path, true if it exists afterwards
- * @property {Record<string, string>} read each `read` path's contents afterwards, "" when there is none
- * @property {(command: string) => string} bashResult the result text of the first Bash call running `command`
- * @property {(command: string) => string[]} bashResults the result text of every Bash call running `command`, in order
+ * @property {Record<string, string>} read
+ *   each `read` path's contents afterwards, "" when there is none
+ * @property {(command: string) => string} bashResult
+ *   the result text of the first Bash call running `command`
+ * @property {(command: string) => string[]} bashResults
+ *   the result text of every Bash call running `command`, in order
  * @property {string} transcript the main session transcript, raw JSONL
  * @property {string} everything the tool stream, the main transcript and every subagent transcript
  */

@@ -32,10 +32,20 @@ export function commandFor(entry, root = ROOT) {
 }
 
 /**
+ * @typedef {object} HookRun
+ * @property {number | null} code
+ * @property {string} stdout
+ * @property {string} stderr
+ * @property {any} answer the JSON on stdout, or null when there is none
+ * @property {number} ms
+ */
+
+/**
  * @param {string} entry
- * @param {object | string | null} payload an object is sent as JSON, a string raw, null sends nothing and keeps stdin open
+ * @param {object | string | null} payload
+ *   an object is sent as JSON, a string raw; null sends nothing and keeps stdin open
  * @param {{ cwd?: string, env?: Record<string, string>, root?: string }} [options]
- * @returns {Promise<{ code: number | null, stdout: string, stderr: string, answer: any, ms: number }>}
+ * @returns {Promise<HookRun>}
  */
 export function runHook(entry, payload, { cwd = ROOT, env = {}, root = ROOT } = {}) {
   const { command, args } = commandFor(entry, root);

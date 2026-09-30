@@ -8,7 +8,16 @@ import { scratchDir } from "./scratch.mjs";
 
 let counter = 0;
 
-/** @typedef {{ tool: string, input: object, error?: boolean, output?: string, cwd?: string } | { say: string } | { human: string }} Step */
+/**
+ * @typedef {object} ToolStep a tool call and what came back
+ * @property {string} tool
+ * @property {object} input
+ * @property {boolean} [error]
+ * @property {string} [output]
+ * @property {string} [cwd]
+ *
+ * @typedef {ToolStep | { say: string } | { human: string }} Step
+ */
 
 /**
  * @param {Step[]} steps
