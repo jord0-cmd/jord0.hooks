@@ -92,6 +92,8 @@ The shell's own `cd` goes by name. After `cd link`, `cd ..` lands in the directo
 
 A `find` that walks through a link (`find link/`, `-L`, `-H`) deletes what is behind it, and the victims are named by where they really are.
 
+A save is matched the same way. Git names its files from the real work tree, so a `git add` run from a linked directory keeps what it staged. macOS's temp directory is one of those: `/var` is a link to `/private/var`.
+
 ## A repository inside the target
 
 `git status` says nothing about work inside another repository. A submodule's uncommitted files. A clone sitting in an ignored `build/`. A second project under the directory being deleted. So a delete looks for them, and asks each one as the repository it is, under its own config, with the same pins.

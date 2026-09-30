@@ -1167,6 +1167,30 @@ describe("the hook: a hidden delete asks, naming exactly what it loses", () => {
   }
 });
 
+// A save's paths are spelled from where the call runs, git's from the real work tree. Through a
+// symlinked directory the two spellings differ (macOS's temp directory is one: /var is a link to
+// /private/var), and a save that matched nothing named what it had saved as a loss.
+const SAVED_THROUGH_A_LINK = [
+  [
+    "cd src; git add mod.py; cd ..; rm -rf wip src",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
+  ["git stash push -u -q -- wip; rm -rf wip src", { names: /src\/mod\.py/, not: /wip\/notes\.md/ }],
+];
+
+describe("the hook: a save made through a symlinked directory keeps what it saved", () => {
+  for (const [command, { names, not }] of SAVED_THROUGH_A_LINK) {
+    it(JSON.stringify(command), async () => {
+      const link = join(tree, "..", "link");
+      symlinkSync(tree, link);
+      const main = await hook(command, { cwd: link });
+      assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
+      assert.match(main.reason, names, main.reason);
+      assert.doesNotMatch(main.reason, not, main.reason);
+    });
+  }
+});
+
 describe("the hook: commands that only look like a loss stay silent", () => {
   for (const command of QUIET_LOOKALIKES) {
     it(JSON.stringify(command), async () => {
