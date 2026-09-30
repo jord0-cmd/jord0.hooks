@@ -345,6 +345,14 @@ function sh(file, args, { cwd, env, input, timeoutMs } = {}) {
       if (timer) clearTimeout(timer);
       resolve({ code: code ?? -1, stdout, stderr });
     });
+    // A program that could not start ends here, with its reason as stderr, not as a crash.
+    child.on("error", (err) => {
+      if (timer) clearTimeout(timer);
+      resolve({ code: -1, stdout, stderr: `${stderr}${err.message}` });
+    });
+    // A program that exits without reading its stdin (`git rev-parse`, `npm view`) closes the
+    // pipe first; the write then fails with EPIPE, which only means nobody wanted the input.
+    child.stdin.on("error", () => {});
     child.stdin.end(input ?? "");
   });
 }
