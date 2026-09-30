@@ -10,14 +10,20 @@ const HOOK_LINE = {
 };
 
 const esc = (value) =>
-  String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
 
 /** @param {any} report the object e2e/run.mjs writes to report.json */
 export function renderReport(report) {
   const total = report.scenarios.length;
   const passed = report.scenarios.filter((s) => s.pass).length;
   const allGreen = passed === total && report.install.pass;
-  const groups = HOOK_ORDER.map((hook) => ({ hook, rows: report.scenarios.filter((s) => s.hook === hook) })).filter((g) => g.rows.length);
+  const groups = HOOK_ORDER.map((hook) => ({
+    hook,
+    rows: report.scenarios.filter((s) => s.hook === hook),
+  })).filter((g) => g.rows.length);
 
   return `<title>jord0.hooks Vanilla Run</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

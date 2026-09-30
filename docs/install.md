@@ -23,12 +23,12 @@ No approval prompt. All three hooks fire in every session where the plugin is en
 
 That is how Claude Code plugins work. It is also why this page exists.
 
-| To | Run |
-|----|-----|
-| turn all three off, keep them installed | `/plugin disable jord0-hooks@jord0-skills` |
-| remove them | `/plugin uninstall jord0-hooks@jord0-skills` |
-| silence DONE-GATE for one shell | `export JORD0_DONE_GATE=0` before starting Claude Code |
-| teach DONE-GATE your own test command | `export JORD0_DONE_GATE_COMMANDS="make ci,./scripts/verify.sh"` |
+| To                                      | Run                                                             |
+| --------------------------------------- | --------------------------------------------------------------- |
+| turn all three off, keep them installed | `/plugin disable jord0-hooks@jord0-skills`                      |
+| remove them                             | `/plugin uninstall jord0-hooks@jord0-skills`                    |
+| silence DONE-GATE for one shell         | `export JORD0_DONE_GATE=0` before starting Claude Code          |
+| teach DONE-GATE your own test command   | `export JORD0_DONE_GATE_COMMANDS="make ci,./scripts/verify.sh"` |
 
 ## When an install is damaged
 

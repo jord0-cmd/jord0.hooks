@@ -58,8 +58,8 @@ nav:
   - Home: index.md
   - Install: install.md
   - Hooks:
-    - DONE-GATE: hooks/done-gate.md
-    - RECOVERABLE: hooks/recoverable.md
-    - FLAG-PROBE: hooks/flag-probe.md
+      - DONE-GATE: hooks/done-gate.md
+      - RECOVERABLE: hooks/recoverable.md
+      - FLAG-PROBE: hooks/flag-probe.md
   - How hooks actually work: how-hooks-work.md
   - How this is tested: testing.md

@@ -53,7 +53,13 @@ export function runHook(entry, payload, { cwd = ROOT, env = {}, root = ROOT } = 
     child.on("error", reject);
     child.on("close", (code) => {
       const text = stdout.trim();
-      resolve({ code, stdout, stderr, answer: text ? JSON.parse(text) : null, ms: Date.now() - started });
+      resolve({
+        code,
+        stdout,
+        stderr,
+        answer: text ? JSON.parse(text) : null,
+        ms: Date.now() - started,
+      });
     });
     if (payload === null) return;
     child.stdin.end(typeof payload === "string" ? payload : JSON.stringify(payload));

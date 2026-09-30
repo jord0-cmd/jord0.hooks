@@ -7,19 +7,13 @@
           {
             "type": "command",
             "command": "node",
-            "args": [
-              "--liftoff-only",
-              "${CLAUDE_PLUGIN_ROOT}/bin/recoverable.mjs"
-            ],
+            "args": ["--liftoff-only", "${CLAUDE_PLUGIN_ROOT}/bin/recoverable.mjs"],
             "timeout": 10
           },
           {
             "type": "command",
             "command": "node",
-            "args": [
-              "--liftoff-only",
-              "${CLAUDE_PLUGIN_ROOT}/bin/flag-probe.mjs"
-            ],
+            "args": ["--liftoff-only", "${CLAUDE_PLUGIN_ROOT}/bin/flag-probe.mjs"],
             "timeout": 10
           }
         ]
@@ -31,10 +25,7 @@
           {
             "type": "command",
             "command": "node",
-            "args": [
-              "--liftoff-only",
-              "${CLAUDE_PLUGIN_ROOT}/bin/done-gate.mjs"
-            ],
+            "args": ["--liftoff-only", "${CLAUDE_PLUGIN_ROOT}/bin/done-gate.mjs"],
             "timeout": 10
           }
         ]

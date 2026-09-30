@@ -17,7 +17,10 @@ before(() => {
     writeFileSync(join(dir, name), body);
     chmodSync(join(dir, name), 0o755);
   };
-  script("deploy.sh", "#!/bin/sh\n# Rebuilds the config and restarts the service.\necho ran > ran.marker\n");
+  script(
+    "deploy.sh",
+    "#!/bin/sh\n# Rebuilds the config and restarts the service.\necho ran > ran.marker\n",
+  );
   script("helpful.sh", '#!/bin/sh\ncase "$1" in\n  -h|--help) echo "usage: helpful.sh" ;;\nesac\n');
   script("tool.py", "import argparse\nparser = argparse.ArgumentParser()\nparser.parse_args()\n");
   script("plain.py", "print('I run whatever you pass me')\n");
@@ -27,8 +30,14 @@ before(() => {
   // Round 1 of review: files that only TALK about help, and files whose code handles it.
   script("says-no.sh", "#!/bin/sh\n# NOTE: this script does NOT support --help.\necho ran\n");
   script("fire.sh", "#!/bin/sh\n# fire and forget\necho ran\n");
-  script("nohelp.py", "import argparse\nparser = argparse.ArgumentParser(add_help=False)\nparser.parse_args()\n");
-  script("tests-arg.sh", '#!/bin/sh\nif [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n');
+  script(
+    "nohelp.py",
+    "import argparse\nparser = argparse.ArgumentParser(add_help=False)\nparser.parse_args()\n",
+  );
+  script(
+    "tests-arg.sh",
+    '#!/bin/sh\nif [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n',
+  );
   script("getopts.sh", '#!/bin/sh\nwhile getopts "hv" opt; do :; done\necho ran\n');
   script("argv.py", 'import sys\nif "--help" in sys.argv:\n    print("usage")\n');
   script("cli.mjs", 'import { Command } from "commander";\nnew Command().parse();\n');
@@ -36,21 +45,39 @@ before(() => {
   script("commented.sh", '#!/bin/sh\n# case "$1" in\n#   -h|--help) usage ;;\n# esac\necho ran\n');
   script("commented.py", "# import argparse\nprint('ran')\n");
   // Round 1b: a handler in a trailing comment or a usage string is not a handler.
-  script("trailing.sh", '#!/bin/bash\nset -euo pipefail\ndeploy_everything "$@"   # case "$1" in -h|--help) usage;; esac\n');
+  script(
+    "trailing.sh",
+    '#!/bin/bash\nset -euo pipefail\ndeploy_everything "$@"   # case "$1" in -h|--help) usage;; esac\n',
+  );
   script("usage-string.sh", '#!/bin/sh\necho "Try: make help (or make --help)"\necho ran\n');
-  script("trailing.mjs", '#!/usr/bin/env node\nconsole.log("ran"); // if (arg === "--help") later\n');
+  script(
+    "trailing.mjs",
+    '#!/usr/bin/env node\nconsole.log("ran"); // if (arg === "--help") later\n',
+  );
   script("oneliner.sh", '#!/bin/sh\ncase "$1" in -h|--help) echo usage; exit 0;; esac\necho ran\n');
-  script("hash-in-string.sh", '#!/bin/sh\necho "# not a comment"\ncase "$1" in\n  --help | -h ) echo usage ;;\nesac\n');
+  script(
+    "hash-in-string.sh",
+    '#!/bin/sh\necho "# not a comment"\ncase "$1" in\n  --help | -h ) echo usage ;;\nesac\n',
+  );
   // Round 1b: bash runs an executable text file with no `#!` as a shell script.
   script("legacy", "echo no shebang here\necho ran\n");
   writeFileSync(join(dir, "notexec"), "echo ran\n"); // not executable: bash refuses to run it
   script("compiled", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0]));
   // Round 1b: wrappers that hand the flag to a CLI that answers it, known by the call they make.
   mkdirSync(join(dir, "django"));
-  script("django/manage.py", "import sys\n\ndef main():\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(sys.argv)\n");
-  script("gradlew", '#!/bin/sh\nset -- -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"\nexec "$JAVACMD" "$@"\n');
+  script(
+    "django/manage.py",
+    "import sys\n\ndef main():\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(sys.argv)\n",
+  );
+  script(
+    "gradlew",
+    '#!/bin/sh\nset -- -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"\nexec "$JAVACMD" "$@"\n',
+  );
   script("manage.py", "print('a manage.py that is not Django, and runs')\n");
-  script("length.sh", '#!/bin/sh\nif [ ${#1} -gt 0 ] && [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n');
+  script(
+    "length.sh",
+    '#!/bin/sh\nif [ ${#1} -gt 0 ] && [ "$1" = "--help" ]; then echo usage; exit 0; fi\necho ran\n',
+  );
 });
 
 /** The decision FLAG-PROBE makes for `command` run in the scratch dir after `history`. */
@@ -92,7 +119,9 @@ describe("FLAG-PROBE denies a help probe of an unread script that does not handl
   }
 
   it("finds a bare script name on PATH, the way the shell would", async () => {
-    const { decision } = await decide("deploy.sh --help", [], { PATH: `${dir}:${process.env.PATH}` });
+    const { decision } = await decide("deploy.sh --help", [], {
+      PATH: `${dir}:${process.env.PATH}`,
+    });
     assert.equal(decision, "deny");
   });
 
@@ -118,7 +147,10 @@ describe("FLAG-PROBE stays silent", () => {
   });
 
   it("when the script was read earlier from Bash", async () => {
-    assert.equal((await decide("./deploy.sh --help", [bash("head -40 deploy.sh")])).decision, "silent");
+    assert.equal(
+      (await decide("./deploy.sh --help", [bash("head -40 deploy.sh")])).decision,
+      "silent",
+    );
   });
 
   it("when the same command reads the script before probing it", async () => {
@@ -166,7 +198,12 @@ describe("round 1 of review: text about help is not code that handles it", () =>
       assert.equal((await decide(command)).decision, "deny");
     });
   }
-  for (const command of ["./tests-arg.sh --help", "./getopts.sh -h", "python3 argv.py --help", "node cli.mjs --help"]) {
+  for (const command of [
+    "./tests-arg.sh --help",
+    "./getopts.sh -h",
+    "python3 argv.py --help",
+    "node cli.mjs --help",
+  ]) {
     it(`stays silent for ${command}`, async () => {
       assert.equal((await decide(command)).decision, "silent");
     });
@@ -220,7 +257,11 @@ describe("round 1 of review: spellings that used to walk past", () => {
 });
 
 describe("round 1b: only code that handles the flag counts", () => {
-  for (const command of ["./trailing.sh --help", "./usage-string.sh --help", "node trailing.mjs --help"]) {
+  for (const command of [
+    "./trailing.sh --help",
+    "./usage-string.sh --help",
+    "node trailing.mjs --help",
+  ]) {
     it(`denies ${command}`, async () => {
       assert.equal((await decide(command)).decision, "deny");
     });
@@ -245,7 +286,12 @@ describe("round 1b: a wrapper that hands the flag on", () => {
 
 describe("round 1b: a script with no #!", () => {
   // `bash notexec` runs it though it has no #! and no exec bit: the interpreter opens it.
-  for (const command of ["./legacy --help", "bash legacy --help", "sh ./legacy -h", "bash notexec --help"]) {
+  for (const command of [
+    "./legacy --help",
+    "bash legacy --help",
+    "sh ./legacy -h",
+    "bash notexec --help",
+  ]) {
     it(`denies ${command}`, async () => {
       assert.equal((await decide(command)).decision, "deny");
     });
@@ -265,7 +311,13 @@ describe("round 1b: a command the grammar cannot parse", () => {
     const { decision, reason } = await decide(hidden);
     assert.equal(decision, "ask");
     assert.match(reason, /cannot be parsed and it carries a help flag/);
-    const payload = { tool_name: "Bash", tool_input: { command: hidden }, cwd: dir, agent_id: "agent-1", transcript_path: transcript([]) };
+    const payload = {
+      tool_name: "Bash",
+      tool_input: { command: hidden },
+      cwd: dir,
+      agent_id: "agent-1",
+      transcript_path: transcript([]),
+    };
     assert.equal(decisionOf((await runHook("flag-probe", payload, { cwd: dir })).answer), "deny");
   });
 
@@ -289,13 +341,20 @@ describe("round 1 of review: which read vouches for which script", () => {
 
   it("names the full path to read for a script found on PATH", async () => {
     const { reason } = await decide("deploy.sh --help", [], { PATH: `${dir}:${process.env.PATH}` });
-    assert.match(reason, new RegExp(`head -40 ${join(dir, "deploy.sh").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    assert.match(
+      reason,
+      new RegExp(`head -40 ${join(dir, "deploy.sh").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    );
   });
 });
 
 describe("round 1 of review: a malformed payload is not silence", () => {
   it("asks when the payload carries no command", async () => {
-    const result = await runHook("flag-probe", { tool_name: "Bash", tool_input: {}, cwd: dir }, { cwd: dir });
+    const result = await runHook(
+      "flag-probe",
+      { tool_name: "Bash", tool_input: {}, cwd: dir },
+      { cwd: dir },
+    );
     assert.equal(decisionOf(result.answer), "ask");
     assert.match(reasonOf(result.answer), /no tool_input\.command string/);
   });
@@ -313,10 +372,19 @@ describe("round 2 of review", () => {
       chmodSync(join(dir, name), 0o755);
     };
     // getopts "h:" takes a host after -h; it handles neither -h as help nor --help.
-    script("getopts-host.sh", '#!/bin/sh\nwhile getopts "h:p:" opt; do case $opt in h) HOST=$OPTARG ;; esac; done\necho deploy to $HOST\n');
-    script("getopts-help.sh", '#!/bin/sh\nwhile getopts "hv" opt; do case $opt in h) echo usage; exit 0 ;; esac; done\necho ran\n');
+    script(
+      "getopts-host.sh",
+      '#!/bin/sh\nwhile getopts "h:p:" opt; do case $opt in h) HOST=$OPTARG ;; esac; done\necho deploy to $HOST\n',
+    );
+    script(
+      "getopts-help.sh",
+      '#!/bin/sh\nwhile getopts "hv" opt; do case $opt in h) echo usage; exit 0 ;; esac; done\necho ran\n',
+    );
     // A usage text that lists the flags, and a message that mentions one, handle nothing.
-    script("usage-heredoc.sh", "#!/bin/sh\ncat <<EOF\nOptions:\n  -h|--help) show this\nEOF\necho ran\n");
+    script(
+      "usage-heredoc.sh",
+      "#!/bin/sh\ncat <<EOF\nOptions:\n  -h|--help) show this\nEOF\necho ran\n",
+    );
     script("message.py", "print('--help', 'is not supported, running anyway')\n");
   });
 
@@ -354,6 +422,9 @@ describe("round 2 of review", () => {
   }
 
   it("does not ask about --help mentioned in quoted prose of a command it cannot parse", async () => {
-    assert.equal((await decide('git commit -m "document --help" && cat <<EOF; echo\nbody\nEOF')).decision, "silent");
+    assert.equal(
+      (await decide('git commit -m "document --help" && cat <<EOF; echo\nbody\nEOF')).decision,
+      "silent",
+    );
   });
 });

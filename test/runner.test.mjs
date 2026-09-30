@@ -69,7 +69,11 @@ describe("answers", () => {
 
 describe("a PreToolUse guard that cannot do its job", () => {
   it("asks when the payload cannot be read", async () => {
-    const answer = await runGuard("TEST", guardThat(async () => null), { stdin: stdinOf("") });
+    const answer = await runGuard(
+      "TEST",
+      guardThat(async () => null),
+      { stdin: stdinOf("") },
+    );
     assert.equal(decisionOf(answer), "ask");
     assert.match(reasonOf(answer), /TEST could not read its input/);
   });
@@ -119,10 +123,18 @@ describe("a PreToolUse guard that cannot do its job", () => {
 });
 
 describe("a Stop hook that cannot do its job", () => {
-  const STOP = { hook_event_name: "Stop", stop_hook_active: false, last_assistant_message: "Done." };
+  const STOP = {
+    hook_event_name: "Stop",
+    stop_hook_active: false,
+    last_assistant_message: "Done.",
+  };
 
   it("lets the stop through and tells the user when the payload cannot be read", async () => {
-    const answer = await runStop("TEST", guardThat(async () => null), { stdin: stdinOf("{") });
+    const answer = await runStop(
+      "TEST",
+      guardThat(async () => null),
+      { stdin: stdinOf("{") },
+    );
     assert.match(answer.systemMessage, /TEST could not read its input/);
     assert.equal(answer.hookSpecificOutput, undefined);
   });
@@ -193,7 +205,10 @@ describe("a stray error after the answer", () => {
       },
     }));`;
   const spawn = (script, payload) =>
-    spawnSync(process.execPath, ["--input-type=module", "-e", script], { input: JSON.stringify(payload), encoding: "utf8" });
+    spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      input: JSON.stringify(payload),
+      encoding: "utf8",
+    });
 
   it("a guard still exits 0 with exactly one answer", () => {
     const ran = spawn(straying("guardMain", '{ decision: "ask", reason: "judged" }'), MAIN);
@@ -205,7 +220,11 @@ describe("a stray error after the answer", () => {
   });
 
   it("a Stop hook still exits 0 with exactly one answer", () => {
-    const stop = { hook_event_name: "Stop", stop_hook_active: false, last_assistant_message: "Done." };
+    const stop = {
+      hook_event_name: "Stop",
+      stop_hook_active: false,
+      last_assistant_message: "Done.",
+    };
     const ran = spawn(straying("stopMain", '{ feedback: "judged" }'), stop);
     assert.equal(ran.status, 0, ran.stderr);
     assert.equal(ran.stdout.trim().split("\n").length, 1, ran.stdout);

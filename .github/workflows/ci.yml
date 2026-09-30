@@ -27,6 +27,16 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
 
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # The version is pinned in package.json's scripts, the one place it is written.
+      - run: npm run format:check
+
   docs:
     runs-on: ubuntu-latest
     steps:

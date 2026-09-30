@@ -11,9 +11,16 @@ import { describe, it } from "node:test";
 
 import { ROOT } from "./helpers/hook.mjs";
 
-const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT }).toString("utf8").split("\n").filter(Boolean);
+const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT })
+  .toString("utf8")
+  .split("\n")
+  .filter(Boolean);
 const text = (file) => readFileSync(join(ROOT, file), "utf8");
-const TEXT_FILES = tracked.filter((f) => /\.(?:mjs|js|json|md|yml|yaml|css|html|txt)$|^LICENSE$|Dockerfile$|^\.gitignore$/.test(f) && f !== "package-lock.json");
+const TEXT_FILES = tracked.filter(
+  (f) =>
+    /\.(?:mjs|js|json|md|yml|yaml|css|html|txt)$|^LICENSE$|Dockerfile$|^\.gitignore$/.test(f) &&
+    f !== "package-lock.json",
+);
 
 // Words from the machines and the people this was built beside. None belongs in a public repo, and
 // neither does a list of them: a readable list is the leak it exists to stop. So each word is kept
@@ -40,7 +47,8 @@ const PRIVATE_SHAPES = [/\/home\/(?!tester\b)[a-z]\w*/, /\b192\.168\.\d+\.\d+/, 
 
 const digestOf = new Map();
 function isPrivateWord(word) {
-  if (!digestOf.has(word)) digestOf.set(word, PRIVATE_WORDS.has(createHash("sha256").update(word).digest("hex")));
+  if (!digestOf.has(word))
+    digestOf.set(word, PRIVATE_WORDS.has(createHash("sha256").update(word).digest("hex")));
   return digestOf.get(word);
 }
 
@@ -53,11 +61,19 @@ function isPrivateWord(word) {
  */
 function leaksIn(line) {
   const found = PRIVATE_SHAPES.filter((re) => re.test(line)).map(String);
-  for (const [how, variant] of [["", line], [" in a regex", line.replace(/\\[A-Za-z]/g, " ")]]) {
-    const words = variant.toLowerCase().replace(/[0-9]/g, "#").split(/[^a-z#]+/).filter(Boolean);
+  for (const [how, variant] of [
+    ["", line],
+    [" in a regex", line.replace(/\\[A-Za-z]/g, " ")],
+  ]) {
+    const words = variant
+      .toLowerCase()
+      .replace(/[0-9]/g, "#")
+      .split(/[^a-z#]+/)
+      .filter(Boolean);
     words.forEach((word, i) => {
       if (isPrivateWord(word)) found.push(`private word ${i + 1}${how}`);
-      else if (i > 0 && isPrivateWord(words[i - 1] + word)) found.push(`private words ${i}-${i + 1}${how}`);
+      else if (i > 0 && isPrivateWord(words[i - 1] + word))
+        found.push(`private words ${i}-${i + 1}${how}`);
     });
   }
   return [...new Set(found)];
@@ -79,7 +95,9 @@ describe("nothing private leaks", () => {
   // A commit message is as public as a file, and no file scan reads it. Round 2 wrote a private
   // word into one while describing this very test.
   it("no commit message names one either", () => {
-    const log = execFileSync("git", ["log", "--format=%h%x00%B%x01"], { cwd: ROOT }).toString("utf8");
+    const log = execFileSync("git", ["log", "--format=%h%x00%B%x01"], { cwd: ROOT }).toString(
+      "utf8",
+    );
     const hits = [];
     for (const entry of log.split("\x01")) {
       const [sha, body = ""] = entry.trim().split("\0");
@@ -95,7 +113,9 @@ describe("the suite cleans up after itself", () => {
   it("removes a test's git work tree when its process exits", () => {
     const helper = pathToFileURL(join(ROOT, "test", "helpers", "repo.mjs")).href;
     const script = `import { makeTree } from ${JSON.stringify(helper)}; console.log(makeTree());`;
-    const tree = execFileSync(process.execPath, ["--input-type=module", "-e", script]).toString("utf8").trim();
+    const tree = execFileSync(process.execPath, ["--input-type=module", "-e", script])
+      .toString("utf8")
+      .trim();
     assert.ok(tree.endsWith("tree"), tree);
     assert.equal(existsSync(tree), false, `${tree} outlived the process that made it`);
   });
@@ -106,11 +126,17 @@ describe("the wiring starts on this Node", () => {
   // start (exit 9, "bad option"), and Claude Code runs the tool when a hook exits like that.
   // The quiet-list tests would pass on that silence, so this asks Node directly.
   it("node accepts every flag hooks.json gives it", () => {
-    const hooks = Object.values(JSON.parse(text("hooks/hooks.json")).hooks).flatMap((groups) => groups.flatMap((g) => g.hooks));
+    const hooks = Object.values(JSON.parse(text("hooks/hooks.json")).hooks).flatMap((groups) =>
+      groups.flatMap((g) => g.hooks),
+    );
     for (const hook of hooks) {
       const flags = hook.args.slice(0, -1);
       const started = spawnSync(hook.command, [...flags, "-e", "0"], { encoding: "utf8" });
-      assert.equal(started.status, 0, `${hook.command} ${flags.join(" ")}: ${started.stderr.trim()}`);
+      assert.equal(
+        started.status,
+        0,
+        `${hook.command} ${flags.join(" ")}: ${started.stderr.trim()}`,
+      );
     }
   });
 });
@@ -119,10 +145,25 @@ describe("every count agrees with the wiring", () => {
   const wiring = JSON.parse(text("hooks/hooks.json")).hooks;
   const entries = Object.values(wiring).flatMap((groups) => groups.flatMap((g) => g.hooks));
   const count = entries.length;
-  const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  const WORDS = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+  ];
 
   it("hooks.json wires exactly the scripts in bin/", () => {
-    const scripts = tracked.filter((f) => f.startsWith("bin/")).map((f) => f.slice(4)).sort();
+    const scripts = tracked
+      .filter((f) => f.startsWith("bin/"))
+      .map((f) => f.slice(4))
+      .sort();
     const wired = entries.map((h) => h.args.at(-1).split("/bin/")[1]).sort();
     assert.deepEqual(wired, scripts);
   });
@@ -132,7 +173,8 @@ describe("every count agrees with the wiring", () => {
     for (const file of TEXT_FILES.filter((f) => /\.(?:md|json|yml)$/.test(f))) {
       for (const m of text(file).matchAll(/\b(\w+) (?:Claude Code )?hooks\b/gi)) {
         const said = m[1].toLowerCase();
-        const n = WORDS.indexOf(said) >= 0 ? WORDS.indexOf(said) : /^\d+$/.test(said) ? Number(said) : null;
+        const n =
+          WORDS.indexOf(said) >= 0 ? WORDS.indexOf(said) : /^\d+$/.test(said) ? Number(said) : null;
         if (n !== null && n !== count) wrong.push(`${file}: "${m[0]}"`);
       }
     }
@@ -158,11 +200,16 @@ describe("every source file explains itself", () => {
   });
 
   it("contains no em-dash anywhere, in code or prose", () => {
-    assert.deepEqual(TEXT_FILES.filter((f) => text(f).includes("\u2014")), []);
+    assert.deepEqual(
+      TEXT_FILES.filter((f) => text(f).includes("\u2014")),
+      [],
+    );
   });
 
   it("never builds a permissionDecision of allow", () => {
-    const allowing = sources.filter((f) => f.startsWith("lib/") && /permissionDecision:\s*["']allow/.test(text(f)));
+    const allowing = sources.filter(
+      (f) => f.startsWith("lib/") && /permissionDecision:\s*["']allow/.test(text(f)),
+    );
     assert.deepEqual(allowing, []);
   });
 });
@@ -178,6 +225,9 @@ describe("history", () => {
       .split("\n")
       .filter(Boolean);
     const leaking = [...new Set(people)].filter((who) => leaksIn(who).length > 0);
-    assert.deepEqual(leaking.map((who) => leaksIn(who)), []);
+    assert.deepEqual(
+      leaking.map((who) => leaksIn(who)),
+      [],
+    );
   });
 });

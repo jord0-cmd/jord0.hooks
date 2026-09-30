@@ -3,6 +3,8 @@
 A new guard earns its place the same way these three did: a failure that already happened, told plainly on its page.
 
 - `npm ci --ignore-scripts && npm test` must pass. No dev dependencies.
+- `npm run format:check` must pass; `npm run format` fixes it. Prettier is pinned in `package.json` and run
+  through `npx`, so it never lands in the plugin's install.
 - A test for a guard is run once with the guard removed, and it must go red. Say so in the pull request.
 - Hook tests go through the real entry script, spawned the way `hooks/hooks.json` configures it.
 - A guard never answers `allow`, and never fails open. See `lib/runner.mjs`.

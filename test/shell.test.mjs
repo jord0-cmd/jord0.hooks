@@ -8,7 +8,8 @@ import { listCommands, resolveWord } from "../lib/shell.mjs";
 const commands = async (text) =>
   (await listCommands(text)).events.filter((e) => e.kind === "command");
 const argvs = async (text) => (await commands(text)).map((c) => c.argv.join(" "));
-const argvOf = (listing) => listing.events.filter((e) => e.kind === "command").map((c) => c.argv.join(" "));
+const argvOf = (listing) =>
+  listing.events.filter((e) => e.kind === "command").map((c) => c.argv.join(" "));
 
 describe("listing commands", () => {
   it("splits a plain sequence in source order", async () => {
@@ -121,7 +122,10 @@ describe("listing commands", () => {
   it("a `$( )` runs commands whatever encloses it, so its error is not arithmetic-hidden", async () => {
     // The command hides in `$( )` nested in a test or an arithmetic expansion, which share
     // expression node types with `(( ))` but still run the substitution's commands.
-    assert.equal((await listCommands("[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]")).hasError, true);
+    assert.equal(
+      (await listCommands("[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]")).hasError,
+      true,
+    );
     assert.equal((await listCommands("echo $(( 1 + $(cat <<EOF; rm\nEOF\n) ))")).hasError, true);
   });
 
@@ -200,7 +204,10 @@ describe("the lister on arbitrary input", () => {
     const next = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31);
     for (let i = 0; i < 400; i += 1) {
       const start = seed;
-      const text = Array.from({ length: next() % 40 }, () => alphabet[next() % alphabet.length]).join("");
+      const text = Array.from(
+        { length: next() % 40 },
+        () => alphabet[next() % alphabet.length],
+      ).join("");
       const listing = await listCommands(text).catch((err) => {
         throw new Error(`seed ${start}: ${JSON.stringify(text)} threw ${err.message}`);
       });

@@ -2,11 +2,11 @@
 
 Three Claude Code hooks. Each one exists because of a failure that already happened.
 
-| Hook | Fires on | Stops this |
-|------|----------|------------|
-| **DONE-GATE** | Stop | "Done, all fixed" when no test has run since the last code edit, or the last one failed |
-| **RECOVERABLE** | PreToolUse, Bash | a delete or a git discard that would destroy work git cannot give back |
-| **FLAG-PROBE** | PreToolUse, Bash | `--help` on a script that does not parse it and has not been read |
+| Hook            | Fires on         | Stops this                                                                              |
+| --------------- | ---------------- | --------------------------------------------------------------------------------------- |
+| **DONE-GATE**   | Stop             | "Done, all fixed" when no test has run since the last code edit, or the last one failed |
+| **RECOVERABLE** | PreToolUse, Bash | a delete or a git discard that would destroy work git cannot give back                  |
+| **FLAG-PROBE**  | PreToolUse, Bash | `--help` on a script that does not parse it and has not been read                       |
 
 A subagent once deleted an untracked project it took for clutter, then reverted two uncommitted fixes. A `--help` probe once ran the script it was asking about, and the script evicted two models from memory. A "done" once stood on 92 green tests while the suite beside them never ran. These are the seeds that grew out of those three days.
 

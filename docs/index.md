@@ -2,11 +2,11 @@
 
 Three Claude Code hooks. Each one exists because of a failure that already happened.
 
-| Hook | Fires on | Stops this |
-|------|----------|------------|
-| [DONE-GATE](hooks/done-gate.md) | <span class="tag event">Stop</span> | "Done, all fixed" when no test has run since the last code edit, or the last one failed |
-| [RECOVERABLE](hooks/recoverable.md) | <span class="tag event">PreToolUse · Bash</span> | a delete or a git discard that would destroy work git cannot give back |
-| [FLAG-PROBE](hooks/flag-probe.md) | <span class="tag event">PreToolUse · Bash</span> | `--help` on a script that does not parse it and has not been read |
+| Hook                                | Fires on                                         | Stops this                                                                              |
+| ----------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| [DONE-GATE](hooks/done-gate.md)     | <span class="tag event">Stop</span>              | "Done, all fixed" when no test has run since the last code edit, or the last one failed |
+| [RECOVERABLE](hooks/recoverable.md) | <span class="tag event">PreToolUse · Bash</span> | a delete or a git discard that would destroy work git cannot give back                  |
+| [FLAG-PROBE](hooks/flag-probe.md)   | <span class="tag event">PreToolUse · Bash</span> | `--help` on a script that does not parse it and has not been read                       |
 
 They are seeds, not a harness.
 

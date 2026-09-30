@@ -45,48 +45,97 @@ async function main() {
   const only = new Set(process.argv.slice(2));
   const scenarios = only.size ? SCENARIOS.filter((s) => only.has(s.id)) : SCENARIOS;
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN || readToken();
-  const version = process.env.CLAUDE_CODE_VERSION || (await sh("npm", ["view", "@anthropic-ai/claude-code", "version"])).stdout.trim();
+  const version =
+    process.env.CLAUDE_CODE_VERSION ||
+    (await sh("npm", ["view", "@anthropic-ai/claude-code", "version"])).stdout.trim();
   const head = (await sh("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT })).stdout.trim();
 
   step(`building the vanilla image (Claude Code ${version})`);
-  await must(sh("docker", ["build", "-q", "-t", IMAGE, "--build-arg", `CLAUDE_CODE_VERSION=${version}`, HERE]));
+  await must(
+    sh("docker", [
+      "build",
+      "-q",
+      "-t",
+      IMAGE,
+      "--build-arg",
+      `CLAUDE_CODE_VERSION=${version}`,
+      HERE,
+    ]),
+  );
 
   // mkdtemp makes the directory 0700, and the container's user is not this one.
   const srv = mkdtempSync(join(tmpdir(), "jord0-hooks-e2e-"));
   process.on("exit", () => rmSync(srv, { recursive: true, force: true }));
   chmodSync(srv, 0o755);
   step(`publishing the committed tree ${head} as a local git remote`);
-  await must(sh("git", ["clone", "-q", "--bare", "--no-local", ROOT, join(srv, "jord0.hooks.git")]));
+  await must(
+    sh("git", ["clone", "-q", "--bare", "--no-local", ROOT, join(srv, "jord0.hooks.git")]),
+  );
   mkdirSync(join(srv, "market", ".claude-plugin"), { recursive: true });
   writeFileSync(
     join(srv, "market", ".claude-plugin", "marketplace.json"),
     JSON.stringify({
       name: "jord0-e2e",
       owner: { name: "e2e" },
-      metadata: { description: "The jord0.hooks end-to-end run: one plugin, served from a local git remote." },
-      plugins: [{ name: "jord0-hooks", source: { source: "url", url: "file:///home/tester/srv/jord0.hooks.git" } }],
+      metadata: {
+        description: "The jord0.hooks end-to-end run: one plugin, served from a local git remote.",
+      },
+      plugins: [
+        {
+          name: "jord0-hooks",
+          source: { source: "url", url: "file:///home/tester/srv/jord0.hooks.git" },
+        },
+      ],
     }),
   );
 
   const name = `jord0-hooks-e2e-${Date.now()}`;
   step(`starting container ${name}`);
   await must(
-    sh("docker", ["run", "-d", "--rm", "--name", name, "-e", "CLAUDE_CODE_OAUTH_TOKEN", "-v", `${srv}:/srv:ro`, IMAGE, "sleep", "infinity"], {
-      env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token },
-    }),
+    sh(
+      "docker",
+      [
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        name,
+        "-e",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "-v",
+        `${srv}:/srv:ro`,
+        IMAGE,
+        "sleep",
+        "infinity",
+      ],
+      {
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token },
+      },
+    ),
   );
-  const exec = (script, options) => sh("docker", ["exec", "-i", name, "bash", "-c", script], options);
+  const exec = (script, options) =>
+    sh("docker", ["exec", "-i", name, "bash", "-c", script], options);
 
-  const report = { head, version, model: MODEL, started: new Date().toISOString(), install: {}, scenarios: [] };
+  const report = {
+    head,
+    version,
+    model: MODEL,
+    started: new Date().toISOString(),
+    install: {},
+    scenarios: [],
+  };
   try {
     step("installing the plugin with Claude Code's own CLI");
     // git refuses to clone a repository another user owns, so the tester takes its own copy
     // of the mount instead of being told to trust someone else's directory.
     await must(exec("cp -r /srv ~/srv"));
     const added = await exec("claude plugin marketplace add ~/srv/market 2>&1");
-    if (added.code !== 0) throw new Error(`marketplace add failed:\n${added.stdout}${added.stderr}`);
+    if (added.code !== 0)
+      throw new Error(`marketplace add failed:\n${added.stdout}${added.stderr}`);
     const installed = await exec("claude plugin install jord0-hooks@jord0-e2e 2>&1");
-    const deps = await exec("find ~/.claude/plugins/cache -maxdepth 6 -type d -name web-tree-sitter 2>/dev/null");
+    const deps = await exec(
+      "find ~/.claude/plugins/cache -maxdepth 6 -type d -name web-tree-sitter 2>/dev/null",
+    );
     const claude = await exec("claude --version");
     report.install = {
       marketplace: added.stdout.trim(),
@@ -96,13 +145,16 @@ async function main() {
       claudeVersion: claude.stdout.trim(),
       pass: installed.code === 0 && deps.stdout.trim() !== "",
     };
-    if (!report.install.pass) throw new Error(`install failed:\n${installed.stdout}${installed.stderr}`);
+    if (!report.install.pass)
+      throw new Error(`install failed:\n${installed.stdout}${installed.stderr}`);
 
     for (const scenario of scenarios) {
       step(`${scenario.id} ${scenario.hook}: ${scenario.title}`);
       const result = await runScenario(exec, scenario);
       report.scenarios.push(result);
-      console.log(`    ${result.pass ? "PASS" : "FAIL"}  ${result.seconds}s  $${result.cost ?? "?"}`);
+      console.log(
+        `    ${result.pass ? "PASS" : "FAIL"}  ${result.seconds}s  $${result.cost ?? "?"}`,
+      );
     }
   } finally {
     await sh("docker", ["rm", "-f", name]);
@@ -112,7 +164,9 @@ async function main() {
   writeFileSync(join(OUT, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(join(OUT, "report.html"), renderReport(report));
   const passed = report.scenarios.filter((s) => s.pass).length;
-  console.log(`\nE2E: ${passed}/${report.scenarios.length} scenarios passed · install ${report.install.pass ? "ok" : "FAILED"} · ${join(OUT, "report.html")}`);
+  console.log(
+    `\nE2E: ${passed}/${report.scenarios.length} scenarios passed · install ${report.install.pass ? "ok" : "FAILED"} · ${join(OUT, "report.html")}`,
+  );
   process.exitCode = passed === report.scenarios.length && report.install.pass ? 0 : 1;
 }
 
@@ -121,7 +175,8 @@ async function runScenario(exec, scenario) {
   await must(exec(`rm -rf ${ws} && mkdir -p ${ws} && cd ${ws} && ${scenario.setup}`));
   const promptFile = `/tmp/prompt-${scenario.id}.txt`;
   await must(exec(`cat > ${promptFile}`, { input: scenario.prompt }));
-  const mode = scenario.mode === "bypass" ? "--dangerously-skip-permissions" : "--permission-mode default";
+  const mode =
+    scenario.mode === "bypass" ? "--dangerously-skip-permissions" : "--permission-mode default";
   const started = Date.now();
   const ran = await exec(
     `cd ${ws} && claude -p "$(cat ${promptFile})" --output-format stream-json --verbose --model ${MODEL} --max-turns 12 ${mode}`,
@@ -137,8 +192,11 @@ async function runScenario(exec, scenario) {
     }
   });
   const slug = ws.replace(/[^A-Za-z0-9]/g, "-");
-  const transcript = (await exec(`cat $(ls -t ~/.claude/projects/${slug}/*.jsonl 2>/dev/null | head -1) 2>/dev/null`)).stdout;
-  const subagents = (await exec(`cat ~/.claude/projects/${slug}/*/subagents/*.jsonl 2>/dev/null`)).stdout;
+  const transcript = (
+    await exec(`cat $(ls -t ~/.claude/projects/${slug}/*.jsonl 2>/dev/null | head -1) 2>/dev/null`)
+  ).stdout;
+  const subagents = (await exec(`cat ~/.claude/projects/${slug}/*/subagents/*.jsonl 2>/dev/null`))
+    .stdout;
   const exists = {};
   for (const path of scenario.probe) {
     const target = path.startsWith("~/") ? `$HOME/${path.slice(2)}` : `${ws}/${path}`;
@@ -154,8 +212,13 @@ async function runScenario(exec, scenario) {
   const results = new Map();
   for (const event of events) {
     for (const block of event.message?.content ?? []) {
-      if (block.type === "tool_use" && block.name === "Bash") uses.set(block.id, String(block.input?.command ?? ""));
-      if (block.type === "tool_result") results.set(block.tool_use_id, { isError: block.is_error === true, text: textOf(block.content) });
+      if (block.type === "tool_use" && block.name === "Bash")
+        uses.set(block.id, String(block.input?.command ?? ""));
+      if (block.type === "tool_result")
+        results.set(block.tool_use_id, {
+          isError: block.is_error === true,
+          text: textOf(block.content),
+        });
     }
   }
   const bashResults = (command) => {
@@ -163,7 +226,9 @@ async function runScenario(exec, scenario) {
     for (const [id, text] of uses) {
       if (text.trim() !== command && !text.includes(command)) continue;
       const r = results.get(id);
-      out.push(r ? `${r.isError ? "[error] " : ""}${r.text}`.slice(0, 1200) : "(no result recorded)");
+      out.push(
+        r ? `${r.isError ? "[error] " : ""}${r.text}`.slice(0, 1200) : "(no result recorded)",
+      );
     }
     return out;
   };
@@ -171,7 +236,9 @@ async function runScenario(exec, scenario) {
     for (const [id, text] of uses) {
       if (text.trim() === command || text.includes(command)) {
         const r = results.get(id);
-        return r ? `${r.isError ? "[error] " : ""}${r.text}`.slice(0, 1200) : "(no result recorded)";
+        return r
+          ? `${r.isError ? "[error] " : ""}${r.text}`.slice(0, 1200)
+          : "(no result recorded)";
       }
     }
     return "(the command was never run)";
@@ -204,7 +271,10 @@ async function runScenario(exec, scenario) {
 
 function textOf(content) {
   if (typeof content === "string") return content;
-  return (content ?? []).filter((b) => b?.type === "text").map((b) => b.text).join("\n");
+  return (content ?? [])
+    .filter((b) => b?.type === "text")
+    .map((b) => b.text)
+    .join("\n");
 }
 
 function ensure(dir) {
@@ -233,7 +303,8 @@ function step(text) {
 
 async function must(promise) {
   const result = await promise;
-  if (result.code !== 0) throw new Error(`command failed (${result.code}): ${result.stderr || result.stdout}`);
+  if (result.code !== 0)
+    throw new Error(`command failed (${result.code}): ${result.stderr || result.stdout}`);
   return result;
 }
 
@@ -245,7 +316,11 @@ async function must(promise) {
  */
 function sh(file, args, { cwd, env, input, timeoutMs } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(file, args, { cwd, env: env ?? process.env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(file, args, {
+      cwd,
+      env: env ?? process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     const timer = timeoutMs ? setTimeout(() => child.kill("SIGKILL"), timeoutMs) : null;

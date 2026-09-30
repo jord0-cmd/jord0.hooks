@@ -8,7 +8,15 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -47,13 +55,26 @@ describe("judges: what a delete would lose", () => {
     assert.match(v.reason, /belongs to the main session/);
   });
 
-  for (const cmd of ["rm -r wip", "rm -rf wip/", "rm -rf ./wip/deep", "rm --recursive --force wip", "rm -rf wip/*", "rm -rf src"]) {
+  for (const cmd of [
+    "rm -r wip",
+    "rm -rf wip/",
+    "rm -rf ./wip/deep",
+    "rm --recursive --force wip",
+    "rm -rf wip/*",
+    "rm -rf src",
+  ]) {
     it(`loses work: ${cmd}`, async () => {
       assert.equal((await judges.rm(words(cmd), ctx()))?.decision, "ask");
     });
   }
 
-  for (const cmd of ["rm -rf build", "rm -rf node_modules", "rm -rf cleandir", "rm -rf does-not-exist", "rm -f wip/notes.md"]) {
+  for (const cmd of [
+    "rm -rf build",
+    "rm -rf node_modules",
+    "rm -rf cleandir",
+    "rm -rf does-not-exist",
+    "rm -f wip/notes.md",
+  ]) {
     it(`loses nothing git cannot return: ${cmd}`, async () => {
       assert.equal(await judges.rm(words(cmd), ctx()), null);
     });
@@ -78,13 +99,21 @@ describe("judges: what a delete would lose", () => {
 });
 
 describe("judges: find", () => {
-  for (const cmd of ["find wip -delete", "find . -name notes.md -delete", "find wip -type f -exec rm {} +"]) {
+  for (const cmd of [
+    "find wip -delete",
+    "find . -name notes.md -delete",
+    "find wip -type f -exec rm {} +",
+  ]) {
     it(`loses work: ${cmd}`, async () => {
       assert.equal((await judges.find(words(cmd), ctx()))?.decision, "ask");
     });
   }
 
-  for (const cmd of ["find . -name *.pyc -delete", "find . -name __pycache__ -type d -exec rm -rf {} +", "find wip -name *.md"]) {
+  for (const cmd of [
+    "find . -name *.pyc -delete",
+    "find . -name __pycache__ -type d -exec rm -rf {} +",
+    "find wip -name *.md",
+  ]) {
     it(`loses nothing: ${cmd}`, async () => {
       assert.equal(await judges.find(words(cmd), ctx()), null);
     });
@@ -108,12 +137,31 @@ describe("judges: find", () => {
 
 describe("judges: xargs-fed rm", () => {
   it("dry-runs a printing find feeder exactly as written", async () => {
-    assert.equal((await judges.pipeFedRm(["rm", "-rf"], { kind: "find", argv: words("find . -name wip") }, ctx()))?.decision, "ask");
-    assert.equal(await judges.pipeFedRm(["rm", "-f"], { kind: "find", argv: words("find . -name *.pyc") }, ctx()), null);
+    assert.equal(
+      (
+        await judges.pipeFedRm(
+          ["rm", "-rf"],
+          { kind: "find", argv: words("find . -name wip") },
+          ctx(),
+        )
+      )?.decision,
+      "ask",
+    );
+    assert.equal(
+      await judges.pipeFedRm(
+        ["rm", "-f"],
+        { kind: "find", argv: words("find . -name *.pyc") },
+        ctx(),
+      ),
+      null,
+    );
   });
 
   it("reads the operands from an input file", async () => {
-    assert.equal((await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "list.txt" }, ctx()))?.decision, "ask");
+    assert.equal(
+      (await judges.pipeFedRm(["rm", "-rf"], { kind: "file", path: "list.txt" }, ctx()))?.decision,
+      "ask",
+    );
   });
 
   it("judges where it runs when the feeder cannot be read", async () => {
@@ -178,7 +226,10 @@ describe("judges: git", () => {
   it("treats a staged edit as safe from `checkout -- f`, which restores from the index", async () => {
     gitIn(tree, "add", "src/mod.py");
     assert.equal(await judges.git(words("git checkout -- src/mod.py"), ctx()), null);
-    assert.equal((await judges.git(words("git checkout HEAD -- src/mod.py"), ctx()))?.decision, "ask");
+    assert.equal(
+      (await judges.git(words("git checkout HEAD -- src/mod.py"), ctx()))?.decision,
+      "ask",
+    );
   });
 
   it("asks before dropping a stash that holds something", async () => {
@@ -219,8 +270,20 @@ describe("judges: asking git without running the repository's programs", () => {
   // anything reads it, `git status` included. The fetch runs the transport the REPOSITORY's
   // config names. Round 2 drove both of these to a run on git 2.47 before the pins existed.
   for (const [transport, config] of [
-    ["core.sshCommand over an ssh URL", (trap) => [["remote.origin.url", "ssh://example.invalid/x.git"], ["core.sshCommand", trap]]],
-    ["remote.origin.uploadpack over a local URL", (trap) => [["remote.origin.url", join(tree, "..", "nowhere.git")], ["remote.origin.uploadpack", trap]]],
+    [
+      "core.sshCommand over an ssh URL",
+      (trap) => [
+        ["remote.origin.url", "ssh://example.invalid/x.git"],
+        ["core.sshCommand", trap],
+      ],
+    ],
+    [
+      "remote.origin.uploadpack over a local URL",
+      (trap) => [
+        ["remote.origin.url", join(tree, "..", "nowhere.git")],
+        ["remote.origin.uploadpack", trap],
+      ],
+    ],
   ]) {
     it(`never runs the promisor transport a partial clone names: ${transport}`, async () => {
       const ran = join(tree, "..", "transport-ran");
@@ -233,7 +296,11 @@ describe("judges: asking git without running the repository's programs", () => {
       const head = gitIn(tree, "rev-parse", "HEAD^{tree}").trim();
       rmSync(join(tree, ".git", "objects", head.slice(0, 2), head.slice(2))); // HEAD's tree is now only promised
       await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
-      assert.equal(existsSync(ran), false, `the repository's transport ran: ${existsSync(ran) ? readFileSync(ran, "utf8") : ""}`);
+      assert.equal(
+        existsSync(ran),
+        false,
+        `the repository's transport ran: ${existsSync(ran) ? readFileSync(ran, "utf8") : ""}`,
+      );
     });
   }
 
@@ -244,7 +311,10 @@ describe("judges: asking git without running the repository's programs", () => {
     const shimDir = join(tree, "..", "shim");
     const log = join(tree, "..", "git-calls.log");
     mkdirSync(shimDir);
-    writeFileSync(join(shimDir, "git"), `#!/bin/sh\nprintf '%s NO_LAZY=%s\\n' "$*" "$GIT_NO_LAZY_FETCH" >> "${log}"\nexec "${realGit}" "$@"\n`);
+    writeFileSync(
+      join(shimDir, "git"),
+      `#!/bin/sh\nprintf '%s NO_LAZY=%s\\n' "$*" "$GIT_NO_LAZY_FETCH" >> "${log}"\nexec "${realGit}" "$@"\n`,
+    );
     chmodSync(join(shimDir, "git"), 0o755);
     const saved = process.env.PATH;
     process.env.PATH = `${shimDir}:${saved}`;
@@ -254,7 +324,10 @@ describe("judges: asking git without running the repository's programs", () => {
     } finally {
       process.env.PATH = saved;
     }
-    const calls = readFileSync(log, "utf8").trim().split("\n").filter((c) => !/^version\b/.test(c));
+    const calls = readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .filter((c) => !/^version\b/.test(c));
     assert.ok(calls.length >= 3, calls.join("\n"));
     for (const call of calls) {
       assert.match(call, /-c core\.fsmonitor= /, call);
@@ -269,7 +342,10 @@ describe("judges: asking git without running the repository's programs", () => {
     const realGit = execFileSync("sh", ["-c", "command -v git"]).toString().trim();
     const shimDir = join(tree, "..", "slow");
     mkdirSync(shimDir);
-    writeFileSync(join(shimDir, "git"), `#!/bin/sh\ncase " $* " in *" status "*) sleep 3 ;; esac\nexec "${realGit}" "$@"\n`);
+    writeFileSync(
+      join(shimDir, "git"),
+      `#!/bin/sh\ncase " $* " in *" status "*) sleep 3 ;; esac\nexec "${realGit}" "$@"\n`,
+    );
     chmodSync(join(shimDir, "git"), 0o755);
     const saved = process.env.PATH;
     process.env.PATH = `${shimDir}:${saved}`;
@@ -289,7 +365,10 @@ describe("judges: asking git without running the repository's programs", () => {
     const realGit = execFileSync("sh", ["-c", "command -v git"]).toString().trim();
     const shimDir = join(tree, "..", "old");
     mkdirSync(shimDir);
-    writeFileSync(join(shimDir, "git"), `#!/bin/sh\n[ "$1" = version ] && { echo "git version 2.25.0"; exit 0; }\nexec "${realGit}" "$@"\n`);
+    writeFileSync(
+      join(shimDir, "git"),
+      `#!/bin/sh\n[ "$1" = version ] && { echo "git version 2.25.0"; exit 0; }\nexec "${realGit}" "$@"\n`,
+    );
     chmodSync(join(shimDir, "git"), 0o755);
     const judgesUrl = pathToFileURL(join(ROOT, "lib", "recoverable", "judges.mjs")).href;
     const shellUrl = pathToFileURL(join(ROOT, "lib", "shell.mjs")).href;
@@ -302,13 +381,23 @@ describe("judges: asking git without running the repository's programs", () => {
     const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
       cwd: tree,
       env: { ...process.env, PATH: `${shimDir}:${process.env.PATH}` },
-    }).toString("utf8").trim();
-    assert.equal(out, "ProbeFailed: git 2.25 is older than 2.26 and cannot list this repository's filters");
+    })
+      .toString("utf8")
+      .trim();
+    assert.equal(
+      out,
+      "ProbeFailed: git 2.25 is older than 2.26 and cannot list this repository's filters",
+    );
   });
 
   it("keeps working when a blanked filter is marked required", async () => {
     writeFileSync(join(tree, ".gitattributes"), "*.py filter=lfsish\n");
-    gitIn(tree, "config", "filter.lfsish.clean", `sh -c 'echo ran >> "${tree}/../filter-ran"; cat'`);
+    gitIn(
+      tree,
+      "config",
+      "filter.lfsish.clean",
+      `sh -c 'echo ran >> "${tree}/../filter-ran"; cat'`,
+    );
     gitIn(tree, "config", "filter.lfsish.required", "true");
     writeFileSync(join(tree, "src", "mod.py"), "x = 9\n");
     const v = await judges.git(words("git checkout -- src/mod.py"), ctx());
@@ -344,7 +433,10 @@ describe("judges: round 1 of review", () => {
     assert.equal(v1?.decision, "ask");
     assert.match(v1.reason, /^RECOVERABLE: `git checkout` would destroy .*src\/mod\.py/);
     assert.doesNotMatch(v1.reason, /wip\//, "checkout from the index cannot touch untracked files");
-    assert.equal(await judges.git(["git", "restore", "--staged", "--", "$(git diff --name-only)"], ctx()), null);
+    assert.equal(
+      await judges.git(["git", "restore", "--staged", "--", "$(git diff --name-only)"], ctx()),
+      null,
+    );
     assert.equal(await judges.git(["git", "rm", "--cached", "--", "$(git ls-files)"], ctx()), null);
     const v2 = await judges.git(["git", "-C", "$UNSET_ANYWHERE_X", "reset", "--hard"], ctx());
     assert.equal(v2?.decision, "ask");
@@ -359,7 +451,10 @@ describe("judges: round 1 of review", () => {
 
   it("judges the whole tree for a magic pathspec or a pathspec file", async () => {
     assert.equal((await judges.git(["git", "checkout", "--", ":!*.tmp"], ctx()))?.decision, "ask");
-    assert.equal((await judges.git(words("git restore --pathspec-from-file=list.txt"), ctx()))?.decision, "ask");
+    assert.equal(
+      (await judges.git(words("git restore --pathspec-from-file=list.txt"), ctx()))?.decision,
+      "ask",
+    );
   });
 
   it("counts commits on no remote and the stash when .git or the whole tree goes", async () => {
@@ -369,7 +464,10 @@ describe("judges: round 1 of review", () => {
     assert.match(git.reason, /2 commits on no remote/);
     gitIn(tree, "stash", "push", "-q", "--", "src/mod.py");
     const whole = await judges.rm(["rm", "-rf", tree], ctx());
-    assert.match(whole?.reason ?? "", /give back: 2 commits on no remote, the stash, and list\.txt, /);
+    assert.match(
+      whole?.reason ?? "",
+      /give back: 2 commits on no remote, the stash, and list\.txt, /,
+    );
   });
 
   it("treats -x beside -X as removing everything untracked", async () => {
@@ -446,10 +544,16 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.equal(await judges.rm(words("rm -rf .git"), ctx()), null);
     gitIn(tree, "checkout", "-q", "--detach");
     gitIn(tree, "commit", "--allow-empty", "-qm", "made while detached");
-    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+    assert.match(
+      (await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "",
+      /1 commit on no remote/,
+    );
     gitIn(tree, "tag", "kept");
     gitIn(tree, "checkout", "-q", "main");
-    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+    assert.match(
+      (await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "",
+      /1 commit on no remote/,
+    );
   });
 
   it("names no lost history for a linked worktree, whose commits live in the main tree", async () => {
@@ -459,7 +563,10 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     assert.equal(v?.decision, "ask");
     assert.doesNotMatch(v.reason, /on no remote/);
     assert.match(v.reason, /notes\.md/);
-    assert.match((await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "", /1 commit on no remote/);
+    assert.match(
+      (await judges.rm(words("rm -rf .git"), ctx()))?.reason ?? "",
+      /1 commit on no remote/,
+    );
   });
 
   it("judges `git worktree remove --force`, which deletes a dirty worktree whole", async () => {
@@ -472,16 +579,27 @@ describe("judges: round 1b (the missing-lens seat)", () => {
       assert.match(v.reason, /notes\.md/);
       assert.doesNotMatch(v.reason, /on no remote/);
     }
-    assert.equal((await judges.git(words("git worktree remove -f ../wt"), ctx("agent-1")))?.decision, "deny");
+    assert.equal(
+      (await judges.git(words("git worktree remove -f ../wt"), ctx("agent-1")))?.decision,
+      "deny",
+    );
     assert.equal(await judges.git(words("git worktree remove ../wt"), ctx()), null); // git itself refuses
   });
 
   describe("git's own data, inside .git", () => {
-    for (const cmd of ["rm -f .git/index", "rm -rf .git/objects", "rm -rf .git/refs", "rm -f .git/HEAD"]) {
+    for (const cmd of [
+      "rm -f .git/index",
+      "rm -rf .git/objects",
+      "rm -rf .git/refs",
+      "rm -f .git/HEAD",
+    ]) {
       it(`names it: ${cmd}`, async () => {
         const v = await judges.rm(words(cmd), ctx());
         assert.equal(v?.decision, "ask");
-        assert.match(v.reason, new RegExp(`git's own data \\(${cmd.split(" ").at(-1).replace(".", "\\.")}\\)`));
+        assert.match(
+          v.reason,
+          new RegExp(`git's own data \\(${cmd.split(" ").at(-1).replace(".", "\\.")}\\)`),
+        );
         assert.equal((await judges.rm(words(cmd), ctx("agent-1")))?.decision, "deny");
       });
     }
@@ -494,7 +612,10 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     });
 
     it("names it when a find sweep reaches inside .git", async () => {
-      assert.match((await judges.find(words("find . -name index -delete"), ctx()))?.reason ?? "", /git's own data \(\.git\/index\)/);
+      assert.match(
+        (await judges.find(words("find . -name index -delete"), ctx()))?.reason ?? "",
+        /git's own data \(\.git\/index\)/,
+      );
       assert.equal((await judges.find(words("find .git -delete"), ctx()))?.decision, "ask");
     });
   });
@@ -502,7 +623,12 @@ describe("judges: round 1b (the missing-lens seat)", () => {
   describe("a git command that names its repository", () => {
     // The command runs from a clean directory outside the dirty tree.
     let away;
-    const from = (extra = {}) => ({ ...ctx(), base: away, resolve: (w) => resolveWord(w, { cwd: away }), ...extra });
+    const from = (extra = {}) => ({
+      ...ctx(),
+      base: away,
+      resolve: (w) => resolveWord(w, { cwd: away }),
+      ...extra,
+    });
     beforeEach(() => {
       away = join(tree, "..", "away");
       mkdirSync(away);
@@ -519,9 +645,15 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     }
 
     it("reads GIT_DIR and GIT_WORK_TREE from the command's prefix", async () => {
-      const prefix = [["GIT_DIR", `${tree}/.git`], ["GIT_WORK_TREE", tree]];
+      const prefix = [
+        ["GIT_DIR", `${tree}/.git`],
+        ["GIT_WORK_TREE", tree],
+      ];
       assert.equal((await judges.git(words("git clean -fd"), from({ prefix })))?.decision, "ask");
-      assert.equal((await judges.git(words("git clean -fd"), from({ prefix, agentId: "agent-1" })))?.decision, "deny");
+      assert.equal(
+        (await judges.git(words("git clean -fd"), from({ prefix, agentId: "agent-1" })))?.decision,
+        "deny",
+      );
     });
 
     it("treats the working directory as the work tree when only --git-dir is given, as git does", async () => {
@@ -532,7 +664,13 @@ describe("judges: round 1b (the missing-lens seat)", () => {
     });
 
     it("stays silent when the repository it names has nothing at stake", async () => {
-      assert.equal(await judges.git(words(`git --git-dir=${tree}/.git --work-tree=${tree} clean -fdX`), from()), null);
+      assert.equal(
+        await judges.git(
+          words(`git --git-dir=${tree}/.git --work-tree=${tree} clean -fdX`),
+          from(),
+        ),
+        null,
+      );
     });
   });
 
@@ -547,7 +685,12 @@ describe("the assembly, around a dispatcher that finds nothing", () => {
   const nothing = async () => null;
   const run = (command, { agentId = "", dispatch = nothing, cwd = tree } = {}) =>
     recoverable.judge(
-      { tool_name: "Bash", tool_input: { command }, cwd, ...(agentId ? { agent_id: agentId } : {}) },
+      {
+        tool_name: "Bash",
+        tool_input: { command },
+        cwd,
+        ...(agentId ? { agent_id: agentId } : {}),
+      },
       { signal: new AbortController().signal, dispatch },
     );
   // Valid bash (it ran, and deleted wip/), that the grammar cannot parse.
@@ -556,7 +699,10 @@ describe("the assembly, around a dispatcher that finds nothing", () => {
   it("judges where the call runs when part of the command could not be parsed", async () => {
     const main = await run(unreadable);
     assert.equal(main?.decision, "ask");
-    assert.match(main.reason, /^RECOVERABLE: a command this guard cannot fully parse would destroy/);
+    assert.match(
+      main.reason,
+      /^RECOVERABLE: a command this guard cannot fully parse would destroy/,
+    );
     assert.equal((await run(unreadable, { agentId: "agent-1" }))?.decision, "deny");
   });
 
@@ -579,21 +725,31 @@ describe("the assembly, around a dispatcher that finds nothing", () => {
     const failing = async () => {
       throw new judges.ProbeFailed("git status: timed out");
     };
-    assert.match((await run("ls", { dispatch: failing }))?.reason ?? "", /could not ask git .* timed out/);
+    assert.match(
+      (await run("ls", { dispatch: failing }))?.reason ?? "",
+      /could not ask git .* timed out/,
+    );
     assert.equal((await run("ls", { dispatch: failing, agentId: "agent-1" }))?.decision, "deny");
   });
 });
 
 describe("the hook: a malformed payload", () => {
   it("asks when the payload carries no command, never stays silent", async () => {
-    const result = await runHook("recoverable", { tool_name: "Bash", tool_input: {}, cwd: tree }, { cwd: tree });
+    const result = await runHook(
+      "recoverable",
+      { tool_name: "Bash", tool_input: {}, cwd: tree },
+      { cwd: tree },
+    );
     assert.equal(decisionOf(result.answer), "ask");
     assert.match(reasonOf(result.answer), /no tool_input\.command string/); // not the failure path
   });
 
   it("stays out of a call to another tool", async () => {
     const payload = { tool_name: "BashOutput", tool_input: { bash_id: "b1" }, cwd: tree };
-    assert.equal(decisionOf((await runHook("recoverable", payload, { cwd: tree })).answer), "silent");
+    assert.equal(
+      decisionOf((await runHook("recoverable", payload, { cwd: tree })).answer),
+      "silent",
+    );
   });
 });
 
@@ -712,11 +868,11 @@ const QUIET = [
   "flock -w 5 lock ls",
   "bash script.sh",
   // Safe commands the routing must never start asking about (fresh-context review, round 2).
-  "cd \"$(mktemp -d)\" && rm -rf *",
+  'cd "$(mktemp -d)" && rm -rf *',
   "mkdir -p scratch && cd scratch && rm -rf *",
   "git ls-files --deleted | xargs git restore --staged",
   "git ls-files | xargs git rm --cached",
-  "eval echo \"it's fine\"",
+  'eval echo "it\'s fine"',
 ];
 
 // A broken hook fails closed and asks on EVERYTHING, which would pass the loud list for the
@@ -731,7 +887,9 @@ const FROM_A_JUDGE = /^RECOVERABLE: /;
 const WIP = { names: /wip\/notes\.md/, not: /src\/mod\.py/ };
 const EDIT = { names: /src\/mod\.py/, not: /wip\// };
 const DEEP = { names: /wip\/deep\/plate\.png/, not: /notes\.md|src\/mod\.py/ };
-const FALLBACK = { names: /this guard cannot read|cannot fully parse|more wrappers than this guard follows/ };
+const FALLBACK = {
+  names: /this guard cannot read|cannot fully parse|more wrappers than this guard follows/,
+};
 const TOO_DEEP = { names: /nested deeper than this guard follows/ };
 const EXPECT = new Map([
   ["find $(echo wip) -delete", FALLBACK],
@@ -739,7 +897,10 @@ const EXPECT = new Map([
   ["cd wip && rm -rf deep", DEEP],
   ["git ls-files --others | xargs -I{} rm -f {}", FALLBACK],
   ["rm -rf $S; S=build", FALLBACK],
-  ['for f in notes.md; do rm -rf "wip/$f"; done', { names: /wip\/notes\.md/, not: /plate|src\/mod\.py/ }],
+  [
+    'for f in notes.md; do rm -rf "wip/$f"; done',
+    { names: /wip\/notes\.md/, not: /plate|src\/mod\.py/ },
+  ],
   ["git switch --discard-changes main", EDIT],
   ["git switch -f main", EDIT],
   ["git checkout-index -f -a", EDIT],
@@ -784,16 +945,17 @@ describe("the hook: shapes a fresh-context review turned up", () => {
   // Each is valid bash that deletes (or the control that must not), driven through the real hook.
   const asks = [
     "[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]", // a command hidden in $( ) under [[ ]], not arithmetic
-    "sh -c 'cat <<EOF; rm -rf wip\nbody\nEOF'",         // the unparsed span is in the nested payload
-    "command rm -v -rf wip",                              // -v is rm's flag, not `command`'s lookup
+    "sh -c 'cat <<EOF; rm -rf wip\nbody\nEOF'", // the unparsed span is in the nested payload
+    "command rm -v -rf wip", // -v is rm's flag, not `command`'s lookup
     "exec rm -rf wip",
-    "eval eval eval eval eval eval rm -rf wip",           // nested evals are followed to the rm
+    "eval eval eval eval eval eval rm -rf wip", // nested evals are followed to the rm
   ];
   for (const command of asks) {
     it(JSON.stringify(command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", command);
-      if (command.startsWith("eval")) assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, main.reason);
+      if (command.startsWith("eval"))
+        assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*wip\/notes\.md/, main.reason);
       const sub = await hook(command, { agent: true });
       assert.equal(sub.decision, "deny", command);
     });
@@ -856,9 +1018,18 @@ const LOUD_ROUND_2 = [
   ["rm {list.txt,wip/notes.md}", { names: /list\.txt.*wip\/notes\.md/ }],
   ["DIRS='wip src'; rm -rf $DIRS", { names: /src\/mod\.py.*wip\// }],
   // A find or xargs feeding a shell or git.
-  ["find wip -type f -exec sh -c 'rm \"$0\"' {} \;", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
-  ["find wip -type f | xargs -I{} sh -c 'rm \"{}\"'", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
-  ["find wip -type f -print0 | xargs -0 sh -c 'rm \"$@\"' _", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  [
+    "find wip -type f -exec sh -c 'rm \"$0\"' {} \;",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
+  [
+    "find wip -type f | xargs -I{} sh -c 'rm \"{}\"'",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
+  [
+    "find wip -type f -print0 | xargs -0 sh -c 'rm \"$@\"' _",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
   ["git diff --name-only | xargs git checkout --", EDIT],
   ["find src -name '*.py' -exec git checkout -- {} +", EDIT],
   ["echo wip | xargs rm -rf", WIP],
@@ -869,7 +1040,10 @@ const LOUD_ROUND_2 = [
   ["git read-tree -u --reset HEAD", EDIT],
   ["git add -A && git reset --hard", { names: /src\/mod\.py.*wip\/|wip\/.*src\/mod\.py/ }],
   // One reason names every loss in the call.
-  ["rm -rf wip && git reset --hard", { names: /`rm`: .*wip\/notes\.md.*`git reset --hard`: .*src\/mod\.py/ }],
+  [
+    "rm -rf wip && git reset --hard",
+    { names: /`rm`: .*wip\/notes\.md.*`git reset --hard`: .*src\/mod\.py/ },
+  ],
   // Wrapper options that take a value, a directory a wrapper names, and a name a wrapper gives.
   ["env -Cwip rm -rf deep", DEEP],
   ["env --chdir=wip rm -rf deep", DEEP],
@@ -910,7 +1084,10 @@ const LOUD_ROUND_2 = [
   ["false && git add -A; rm -rf wip", WIP],
   ["if false; then git add -A; fi\nrm -rf wip", WIP],
   ["true || git stash push -u -q; rm -rf wip", WIP],
-  ["cd src; git add mod.py; cd ..; rm -rf wip src", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  [
+    "cd src; git add mod.py; cd ..; rm -rf wip src",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
   ["f() { git add -A; }; false && f; rm -rf wip", WIP], // a function called behind `&&` may not run
   ["trap 'git add -A' EXIT; rm -rf wip", WIP], // a trap runs at the end, after the delete
   // `"$@"` in the program's place is every word it holds.
@@ -920,9 +1097,15 @@ const LOUD_ROUND_2 = [
   ["git switch -f -c hot HEAD", EDIT],
   ["git switch -f -C hot main", EDIT],
   // More values than the guard follows: judged where it runs, never dropped.
-  ["for f in a b c d e f g h rm; do $f -rf wip; done", { names: /more values than this guard follows/ }],
+  [
+    "for f in a b c d e f g h rm; do $f -rf wip; done",
+    { names: /more values than this guard follows/ },
+  ],
   // Two expansions that multiply past the limit: a wrapper that may be one of three, a program one of five.
-  ["if true; then W=sudo; else W=nice; fi; for f in a b c d rm; do $W $f -rf wip; done", { names: /more values than this guard follows/ }],
+  [
+    "if true; then W=sudo; else W=nice; fi; for f in a b c d rm; do $W $f -rf wip; done",
+    { names: /more values than this guard follows/ },
+  ],
   // A stash that may run before a drop: the drop may take what it stashed.
   ["true && git stash push -u -q; git stash drop", { names: /src\/mod\.py/ }],
   // Opus 5, round 3. rm's flags are read after expansion; a later save does not reach back;
@@ -988,7 +1171,11 @@ describe("the hook: round 2 false alarms stay silent", () => {
 
   it("never counts a clean repository's commits for a target it cannot read", async () => {
     gitIn(tree, "stash", "push", "-u", "-q"); // nothing dirty left; one commit on no remote
-    for (const command of ["rm -rf $UNSET_X/scratch", "ls | xargs rm -rf", "git checkout -- $(git diff --name-only)"]) {
+    for (const command of [
+      "rm -rf $UNSET_X/scratch",
+      "ls | xargs rm -rf",
+      "git checkout -- $(git diff --name-only)",
+    ]) {
       const { decision, reason } = await hook(command);
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     }
@@ -1001,7 +1188,8 @@ describe("the hook: round 2 false alarms stay silent", () => {
   });
 
   it("judges a delete over a thousand ignored directories in well under its budget", async () => {
-    for (let i = 0; i < 1500; i += 1) mkdirSync(join(tree, "node_modules", `pkg${i}`), { recursive: true });
+    for (let i = 0; i < 1500; i += 1)
+      mkdirSync(join(tree, "node_modules", `pkg${i}`), { recursive: true });
     const started = Date.now();
     const { decision } = await hook("rm -rf node_modules/*");
     assert.equal(decision, "silent");
@@ -1046,8 +1234,16 @@ const LOUD_ELSEWHERE = [
   ["find .. -name notes.md -delete", "src", NOTES], // rooted at the tree, from inside it
   ["find .. -name notes.md -delete", ".", NOTES], // rooted above every repository: each victim is judged in its own
   // The repository is named by where the command points, not by where it runs.
-  ["env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
-  ["G=git; env GIT_DIR=tree/.git GIT_WORK_TREE=tree $G clean -fd", "..", { names: /wip\/notes\.md/, not: /src\/mod\.py/ }],
+  [
+    "env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd",
+    "..",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
+  [
+    "G=git; env GIT_DIR=tree/.git GIT_WORK_TREE=tree $G clean -fd",
+    "..",
+    { names: /wip\/notes\.md/, not: /src\/mod\.py/ },
+  ],
   ["git worktree remove --force linked", ".", { names: /scratch\.txt/, not: /wip\/|src\/mod\.py/ }],
   ["rm -rf <parent>", "src", { names: /back: 1 commit on no remote, and src\/mod\.py/ }],
   ["cd; rm -rf wip", "..", WIP, { HOME: "<tree>" }], // a bare cd goes HOME
@@ -1062,7 +1258,10 @@ const QUIET_ELSEWHERE = [
   ["(set -P); cd outside/into && cd .. && rm -rf notes.md", ".."], // a subshell's setting ends with it
   ["set -P; bash -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."], // a new shell starts without it
   ["set -P; echo x | xargs sh -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."],
-  ["set -P; find outside -maxdepth 0 -exec sh -c 'cd outside/into && cd .. && rm -rf notes.md' \\;", ".."],
+  [
+    "set -P; find outside -maxdepth 0 -exec sh -c 'cd outside/into && cd .. && rm -rf notes.md' \\;",
+    "..",
+  ],
   ["set -e; cd outside/into && cd .. && rm -rf notes.md", ".."],
   ["find wiplink -type f -delete", "."], // find does not follow a link it is handed without a slash
   ["rm -rf outside/into", ".."], // removes the link, not what it points to
@@ -1071,7 +1270,8 @@ const QUIET_ELSEWHERE = [
 describe("the hook: shapes that need a link, another directory, a HOME or a PATH", () => {
   let parent;
   const placed = (text) => text.replaceAll("<tree>", tree).replaceAll("<parent>", parent);
-  const envOf = (env = {}) => Object.fromEntries(Object.entries(env).map(([k, v]) => [k, placed(v)]));
+  const envOf = (env = {}) =>
+    Object.fromEntries(Object.entries(env).map(([k, v]) => [k, placed(v)]));
 
   beforeEach(() => {
     parent = join(tree, "..");
@@ -1092,13 +1292,20 @@ describe("the hook: shapes that need a link, another directory, a HOME or a PATH
       assert.match(main.reason, FROM_A_JUDGE, main.reason);
       assert.match(main.reason, names, main.reason);
       if (not) assert.doesNotMatch(main.reason, not, main.reason);
-      assert.equal((await hook(placed(command), { ...where, agent: true })).decision, "deny", command);
+      assert.equal(
+        (await hook(placed(command), { ...where, agent: true })).decision,
+        "deny",
+        command,
+      );
     });
   }
 
   for (const [command, at, env] of QUIET_ELSEWHERE) {
     it(`stays silent: ${JSON.stringify(command)} in ${at}`, async () => {
-      const { decision, reason } = await hook(placed(command), { cwd: join(tree, at), env: envOf(env) });
+      const { decision, reason } = await hook(placed(command), {
+        cwd: join(tree, at),
+        env: envOf(env),
+      });
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
@@ -1121,7 +1328,9 @@ describe("the hook: shapes that need a link, another directory, a HOME or a PATH
     // cleandir/lnk -> wip/deep. By name, `cd ..` lands in cleandir; on disk, in wip.
     symlinkSync(join(tree, "wip", "deep"), join(tree, "cleandir", "lnk"));
     writeFileSync(join(tree, "cleandir", "draft.md"), "in flight\n");
-    const maybe = await hook("if false; then set -P; fi; cd cleandir/lnk && cd .. && rm -rf draft.md notes.md");
+    const maybe = await hook(
+      "if false; then set -P; fi; cd cleandir/lnk && cd .. && rm -rf draft.md notes.md",
+    );
     assert.match(maybe.reason, /back: cleandir\/draft\.md, wip\/notes\.md \(2 paths/, maybe.reason);
     const on = await hook("set -P; cd cleandir/lnk && cd .. && rm -rf draft.md notes.md");
     assert.match(on.reason, /back: wip\/notes\.md \(1 path/, on.reason);
@@ -1173,7 +1382,6 @@ describe("the hook: documented floors stay silent", () => {
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
     });
   }
-
 });
 
 // A repository inside the target: a submodule, a clone in an ignored directory, another
@@ -1201,10 +1409,17 @@ describe("the hook: a repository inside the target is read", () => {
     submodule("vendor/sub", "inflight.md");
     const main = await hook("rm -rf vendor");
     assert.equal(main.decision, "ask");
-    assert.match(main.reason, /^RECOVERABLE: `rm` would destroy .*vendor\/sub\/inflight\.md \(1 path/, main.reason);
+    assert.match(
+      main.reason,
+      /^RECOVERABLE: `rm` would destroy .*vendor\/sub\/inflight\.md \(1 path/,
+      main.reason,
+    );
     assert.equal((await hook("rm -rf vendor", { agent: true })).decision, "deny");
     // Named itself, it is read once, as the repository it is, and named as the walk above names it.
-    assert.match((await hook("rm -rf vendor/sub")).reason, /work git cannot give back: vendor\/sub\/inflight\.md \(1 path/);
+    assert.match(
+      (await hook("rm -rf vendor/sub")).reason,
+      /work git cannot give back: vendor\/sub\/inflight\.md \(1 path/,
+    );
   });
 
   it("reads a submodule with unrecorded commits as the submodule, not as a dirty path above it", async () => {
@@ -1234,9 +1449,13 @@ describe("the hook: a repository inside the target is read", () => {
   });
 
   it("finds a submodule past the walk's reach, from the index", async () => {
-    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "third_party", "pad", `d${i}`), { recursive: true });
+    for (let i = 0; i < 2100; i += 1)
+      mkdirSync(join(tree, "third_party", "pad", `d${i}`), { recursive: true });
     submodule("third_party/deep/a/b/sub", "inflight.md");
-    assert.match((await hook("rm -rf third_party")).reason, /third_party\/deep\/a\/b\/sub\/inflight\.md \(1 path/);
+    assert.match(
+      (await hook("rm -rf third_party")).reason,
+      /third_party\/deep\/a\/b\/sub\/inflight\.md \(1 path/,
+    );
   });
 
   it("stays silent on a stray `.git` that git does not take for a repository", async () => {
@@ -1252,7 +1471,10 @@ describe("the hook: a repository inside the target is read", () => {
 
   it("finds a submodule however deep it sits", async () => {
     submodule("third_party/a/b/c/sub", "inflight.md");
-    assert.match((await hook("rm -rf third_party")).reason, /third_party\/a\/b\/c\/sub\/inflight\.md \(1 path/);
+    assert.match(
+      (await hook("rm -rf third_party")).reason,
+      /third_party\/a\/b\/c\/sub\/inflight\.md \(1 path/,
+    );
   });
 
   it("stays silent above a submodule with nothing of its own to lose", async () => {
@@ -1263,7 +1485,11 @@ describe("the hook: a repository inside the target is read", () => {
   it("a find that sweeps a submodule names what it matches there, and only that", async () => {
     submodule("vendor/sub", "inflight.md");
     const swept = await hook("find vendor -type f -delete");
-    assert.match(swept.reason, /^RECOVERABLE: `find` .*vendor\/sub\/inflight\.md \(1 path/, swept.reason);
+    assert.match(
+      swept.reason,
+      /^RECOVERABLE: `find` .*vendor\/sub\/inflight\.md \(1 path/,
+      swept.reason,
+    );
     assert.equal((await hook("find vendor -name a.txt -delete")).decision, "silent"); // committed: git gives it back
   });
 
@@ -1271,7 +1497,11 @@ describe("the hook: a repository inside the target is read", () => {
     cloneAt(join(tree, "build", "deps", "clone"), "patched.md");
     const main = await hook("rm -rf build");
     assert.equal(main.decision, "ask");
-    assert.match(main.reason, /1 commit on no remote in build\/deps\/clone, and build\/deps\/clone\/patched\.md \(1 path/, main.reason);
+    assert.match(
+      main.reason,
+      /1 commit on no remote in build\/deps\/clone, and build\/deps\/clone\/patched\.md \(1 path/,
+      main.reason,
+    );
   });
 
   it("a delete above the repository it runs in names the work in the others below it", async () => {
@@ -1280,13 +1510,18 @@ describe("the hook: a repository inside the target is read", () => {
     gitIn(tree, "stash", "push", "-u", "-q"); // nothing dirty here, so the reason has room for the other's
     const swept = await hook(`rm -rf ${parent}`);
     assert.match(swept.reason, /^RECOVERABLE: `rm` would destroy /, swept.reason);
-    assert.match(swept.reason, /1 commit on no remote, the stash, 1 commit on no remote in other/, swept.reason);
+    assert.match(
+      swept.reason,
+      /1 commit on no remote, the stash, 1 commit on no remote in other/,
+      swept.reason,
+    );
     assert.match(swept.reason, /other\/theirs\.md \(1 path/, swept.reason);
   });
 
   // The documented limit: the walk lists 2,000 directories below a target, nearest first.
   it("does not find a clone past the walk's reach", async () => {
-    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
+    for (let i = 0; i < 2100; i += 1)
+      mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
     cloneAt(join(tree, "build", "deep", "a", "b", "clone"), "patched.md");
     assert.equal((await hook("rm -rf build")).decision, "silent");
     assert.match((await hook("rm -rf build/deep")).reason, /build\/deep\/a\/b\/clone\/patched\.md/); // within reach from here
@@ -1308,12 +1543,17 @@ describe("the hook: a repository inside the target is read", () => {
     assert.equal(cut.git, true);
     // Read nothing, and the `.git` is still found: by name, whatever order the filesystem lists in.
     assert.deepEqual(listDirectories(wide, 0), { dirs: [], read: 0, git: true });
-    assert.deepEqual(listDirectories(join(tree, "no-such-dir"), 10), { dirs: [], read: 0, git: false });
+    assert.deepEqual(listDirectories(join(tree, "no-such-dir"), 10), {
+      dirs: [],
+      read: 0,
+      git: false,
+    });
   });
 
   // The documented limit: the walk reads 20,000 entries in all, however they are spread.
   it("does not find a clone past the walk's entry budget", async () => {
-    for (let i = 0; i < 20_100; i += 1) mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
+    for (let i = 0; i < 20_100; i += 1)
+      mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
     cloneAt(join(tree, "build", "zdeep", "clone"), "patched.md");
     assert.equal((await hook("rm -rf build")).decision, "silent");
     assert.match((await hook("rm -rf build/zdeep")).reason, /build\/zdeep\/clone\/patched\.md/);
@@ -1332,7 +1572,8 @@ describe("the hook: a repository inside the target is read", () => {
   });
 
   it("reads a repository git names in an untracked directory, past the walk's reach", async () => {
-    for (let i = 0; i < 20_100; i += 1) mkdirSync(join(tree, "pkgs", "pad", `d${i}`), { recursive: true });
+    for (let i = 0; i < 20_100; i += 1)
+      mkdirSync(join(tree, "pkgs", "pad", `d${i}`), { recursive: true });
     cloneAt(join(tree, "pkgs", "zdeep", "clone"), "patched.md");
     assert.match((await hook("rm -rf pkgs")).reason, /pkgs\/zdeep\/clone\/patched\.md/);
   });
@@ -1398,7 +1639,10 @@ const LOUD_MINORS = [
   // A program word is followed through eight readings, and at nine is judged where it runs. Two
   // variables multiply: three wrappers by three programs is nine.
   ["for W in sudo nice; do for f in a b c rm; do $W $f -rf wip; done; done", WIP],
-  ["for W in sudo nice nohup; do for f in a b rm; do $W $f -rf wip; done; done", { names: /more values than this guard follows/ }],
+  [
+    "for W in sudo nice nohup; do for f in a b rm; do $W $f -rf wip; done; done",
+    { names: /more values than this guard follows/ },
+  ],
 ];
 
 const QUIET_MINORS = [
@@ -1494,7 +1738,10 @@ describe("the hook: round 3 MINORs in the judges", () => {
     // Driven, git 2.47: in each directory `git rev-parse` fails (invalid gitfile; a gitdir pointing
     // nowhere), and the outer repository's status lists the files inside as its own untracked work.
     // Asked straight at wip/b, the guard was silent and bash deleted wip/b/work.md.
-    for (const [dir, gitfile] of [["a", "not a gitfile\n"], ["b", "gitdir: /nonexistent/x\n"]]) {
+    for (const [dir, gitfile] of [
+      ["a", "not a gitfile\n"],
+      ["b", "gitdir: /nonexistent/x\n"],
+    ]) {
       mkdirSync(join(tree, "wip", dir));
       writeFileSync(join(tree, "wip", dir, ".git"), gitfile);
       writeFileSync(join(tree, "wip", dir, "work.md"), "keep\n");
@@ -1531,14 +1778,23 @@ describe("the hook: round 3 MINORs in the judges", () => {
   });
 
   it("says so when the search for repositories stopped before the end (chair #7)", async () => {
-    for (let i = 0; i < 2100; i += 1) mkdirSync(join(tree, "build", "many", `d${String(i).padStart(4, "0")}`), { recursive: true });
+    for (let i = 0; i < 2100; i += 1)
+      mkdirSync(join(tree, "build", "many", `d${String(i).padStart(4, "0")}`), { recursive: true });
     const cut = await hook("rm -rf build wip");
-    assert.match(cut.reason, /^RECOVERABLE: .*wip\/notes\.md.*reached its limit \(2000 directories, 20000 entries\)/s, cut.reason);
+    assert.match(
+      cut.reason,
+      /^RECOVERABLE: .*wip\/notes\.md.*reached its limit \(2000 directories, 20000 entries\)/s,
+      cut.reason,
+    );
     const whole = await hook("rm -rf wip");
     assert.doesNotMatch(whole.reason, /reached its limit/, whole.reason);
     // Two deletes in one call, one of them cut short: the merged reason still says so.
     const two = await hook("rm -rf build wip; rm -rf src");
-    assert.match(two.reason, /src\/mod\.py.*reached its limit \(2000 directories, 20000 entries\)/s, two.reason);
+    assert.match(
+      two.reason,
+      /src\/mod\.py.*reached its limit \(2000 directories, 20000 entries\)/s,
+      two.reason,
+    );
   });
 
   it("says so when the search ran out of entries to read in one wide directory (chair #7)", async () => {
@@ -1546,16 +1802,24 @@ describe("the hook: round 3 MINORs in the judges", () => {
     mkdirSync(flat);
     for (let i = 0; i < 20_001; i += 1) writeFileSync(join(flat, `f${i}`), "");
     const { reason } = await hook("rm -rf wip");
-    assert.match(reason, /reached its limit \(2000 directories, 20000 entries\)/, reason.slice(-300));
+    assert.match(
+      reason,
+      /reached its limit \(2000 directories, 20000 entries\)/,
+      reason.slice(-300),
+    );
   });
 
   it("asks git each question once per Bash call (Opus 5 #14)", async () => {
     const trace = join(tree, "..", "git-trace");
     const env = { GIT_TRACE: trace };
     // Three judges, three different questions of one place: one git status answers all of them.
-    const { decision } = await hook("rm -rf $X1; find $X2 -delete; echo $X3 | xargs rm -rf", { env });
+    const { decision } = await hook("rm -rf $X1; find $X2 -delete; echo $X3 | xargs rm -rf", {
+      env,
+    });
     assert.equal(decision, "ask");
-    const statuses = readFileSync(trace, "utf8").split("\n").filter((l) => / built-in: git (?:\S+ )*status /.test(l));
+    const statuses = readFileSync(trace, "utf8")
+      .split("\n")
+      .filter((l) => / built-in: git (?:\S+ )*status /.test(l));
     assert.equal(statuses.length, 1, statuses.join("\n"));
   });
 
@@ -1642,7 +1906,10 @@ describe("the hook: round 3 MINORs in cd", () => {
     assert.doesNotMatch(reason, /plate\.png/, reason);
   });
   it("falls back to the current directory when no CDPATH entry has the target", async () => {
-    assert.match((await hook("CDPATH=nope; cd wip && rm -rf deep")).reason, /wip\/deep\/plate\.png/);
+    assert.match(
+      (await hook("CDPATH=nope; cd wip && rm -rf deep")).reason,
+      /wip\/deep\/plate\.png/,
+    );
   });
   it("leaves CDPATH out of `./` and `../` targets", async () => {
     assert.equal((await hook("CDPATH=wip; cd ./deep && rm -rf *")).decision, "silent");

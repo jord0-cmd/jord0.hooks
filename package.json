@@ -16,7 +16,9 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "format": "npx --yes prettier@3.9.9 --write .",
+    "format:check": "npx --yes prettier@3.9.9 --check ."
   },
   "dependencies": {
     "tree-sitter-bash": "0.25.1",

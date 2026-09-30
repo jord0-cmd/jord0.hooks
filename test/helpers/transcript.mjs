@@ -18,7 +18,11 @@ export function transcript(steps) {
   const lines = [];
   for (const step of steps) {
     if ("human" in step) {
-      lines.push({ type: "user", isSidechain: false, message: { role: "user", content: step.human } });
+      lines.push({
+        type: "user",
+        isSidechain: false,
+        message: { role: "user", content: step.human },
+      });
     } else if ("say" in step) {
       lines.push({
         type: "assistant",
@@ -32,7 +36,10 @@ export function transcript(steps) {
         type: "assistant",
         isSidechain: false,
         ...(step.cwd ? { cwd: step.cwd } : {}),
-        message: { role: "assistant", content: [{ type: "tool_use", id, name: step.tool, input: step.input }] },
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id, name: step.tool, input: step.input }],
+        },
       });
       const output = step.output ?? (step.error ? "Exit code 1\n" : "ok");
       lines.push({
@@ -40,7 +47,14 @@ export function transcript(steps) {
         isSidechain: false,
         message: {
           role: "user",
-          content: [{ type: "tool_result", tool_use_id: id, content: output, ...(step.error ? { is_error: true } : {}) }],
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: id,
+              content: output,
+              ...(step.error ? { is_error: true } : {}),
+            },
+          ],
         },
       });
     }
@@ -51,5 +65,8 @@ export function transcript(steps) {
   return path;
 }
 
-export const edit = (file_path) => ({ tool: "Edit", input: { file_path, old_string: "a", new_string: "b" } });
+export const edit = (file_path) => ({
+  tool: "Edit",
+  input: { file_path, old_string: "a", new_string: "b" },
+});
 export const bash = (command, extra = {}) => ({ tool: "Bash", input: { command }, ...extra });
