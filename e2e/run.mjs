@@ -167,8 +167,10 @@ async function main() {
   writeFileSync(join(OUT, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(join(OUT, "report.html"), renderReport(report));
   const passed = report.scenarios.filter((s) => s.pass).length;
+  const install = report.install.pass ? "ok" : "FAILED";
+  const page = join(OUT, "report.html");
   console.log(
-    `\nE2E: ${passed}/${report.scenarios.length} scenarios passed · install ${report.install.pass ? "ok" : "FAILED"} · ${join(OUT, "report.html")}`,
+    `\nE2E: ${passed}/${report.scenarios.length} scenarios passed · install ${install} · ${page}`,
   );
   process.exitCode = passed === report.scenarios.length && report.install.pass ? 0 : 1;
 }
@@ -181,10 +183,12 @@ async function runScenario(exec, scenario) {
   const mode =
     scenario.mode === "bypass" ? "--dangerously-skip-permissions" : "--permission-mode default";
   const started = Date.now();
-  const ran = await exec(
-    `cd ${ws} && claude -p "$(cat ${promptFile})" --output-format stream-json --verbose --model ${MODEL} --max-turns 12 ${mode}`,
-    { timeoutMs: SCENARIO_TIMEOUT_MS },
-  );
+  const command = [
+    `cd ${ws} && claude -p "$(cat ${promptFile})"`,
+    "--output-format stream-json --verbose",
+    `--model ${MODEL} --max-turns 12 ${mode}`,
+  ].join(" ");
+  const ran = await exec(command, { timeoutMs: SCENARIO_TIMEOUT_MS });
   const seconds = Math.round((Date.now() - started) / 1000);
 
   const events = ran.stdout.split("\n").flatMap((line) => {
@@ -293,7 +297,8 @@ function readToken() {
   } catch {
     console.error(
       `No token. Run \`claude setup-token\` in your own terminal and save it:\n` +
-        `  mkdir -p ${dirname(TOKEN_FILE)} && install -m 600 /dev/stdin ${TOKEN_FILE} <<< '<token>'\n` +
+        `  mkdir -p ${dirname(TOKEN_FILE)} && ` +
+        `install -m 600 /dev/stdin ${TOKEN_FILE} <<< '<token>'\n` +
         "or export CLAUDE_CODE_OAUTH_TOKEN for this run.",
     );
     process.exit(2);
