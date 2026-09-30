@@ -190,6 +190,24 @@ describe("every source file explains itself", () => {
     assert.deepEqual(bare, []);
   });
 
+  // Prettier formats code at a width of 100 and leaves comments, and strings it cannot break, as
+  // written. So comments are held to that width everywhere, and every line is held to it outside
+  // test/, where a long shell command is kept whole because it is the thing under test.
+  it("keeps every comment, and every line outside test/, within 100 columns", () => {
+    const wide = [];
+    for (const file of tracked.filter((f) => /\.(?:mjs|css)$/.test(f))) {
+      text(file)
+        .split("\n")
+        .forEach((line, i) => {
+          const comment = /^\s*(?:\/\/|\/?\*)/.test(line);
+          if (line.length > 100 && (comment || !file.startsWith("test/"))) {
+            wide.push(`${file}:${i + 1} (${line.length})`);
+          }
+        });
+    }
+    assert.deepEqual(wide, [], `every line, not just the first:\n${wide.join("\n")}`);
+  });
+
   // This file has to spell out the markers it bans, so the marker scan skips it. The em-dash
   // scan does not need to: the character is written here as an escape.
   const scanned = TEXT_FILES.filter((f) => f !== "test/hygiene.test.mjs");
