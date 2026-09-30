@@ -294,7 +294,8 @@ describe("judges: asking git without running the repository's programs", () => {
       gitIn(tree, "config", "remote.origin.promisor", "true");
       for (const [key, value] of config(trap)) gitIn(tree, "config", key, value);
       const head = gitIn(tree, "rev-parse", "HEAD^{tree}").trim();
-      rmSync(join(tree, ".git", "objects", head.slice(0, 2), head.slice(2))); // HEAD's tree is now only promised
+      // HEAD's tree is now only promised
+      rmSync(join(tree, ".git", "objects", head.slice(0, 2), head.slice(2)));
       await assert.rejects(judges.rm(words("rm -rf wip"), ctx()), judges.ProbeFailed);
       assert.equal(
         existsSync(ran),
@@ -571,7 +572,8 @@ describe("judges: globs, printing finds, git clean -d, worktrees", () => {
 
   it("judges `git worktree remove --force`, which deletes a dirty worktree whole", async () => {
     gitIn(tree, "worktree", "add", "-q", "../wt");
-    assert.equal(await judges.git(words("git worktree remove --force ../wt"), ctx()), null); // clean
+    // clean
+    assert.equal(await judges.git(words("git worktree remove --force ../wt"), ctx()), null);
     writeFileSync(join(tree, "..", "wt", "notes.md"), "mine");
     for (const cmd of ["git worktree remove --force ../wt", "git worktree remove -f ../wt"]) {
       const v = await judges.git(words(cmd), ctx());
@@ -583,7 +585,8 @@ describe("judges: globs, printing finds, git clean -d, worktrees", () => {
       (await judges.git(words("git worktree remove -f ../wt"), ctx("agent-1")))?.decision,
       "deny",
     );
-    assert.equal(await judges.git(words("git worktree remove ../wt"), ctx()), null); // git itself refuses
+    // git itself refuses
+    assert.equal(await judges.git(words("git worktree remove ../wt"), ctx()), null);
   });
 
   describe("git's own data, inside .git", () => {
@@ -817,10 +820,10 @@ const LOUD = [
   "cat <<EOF\n$(rm -rf wip)\nEOF",
   "cat <<EOF; rm -rf wip\nbody\nEOF", // valid bash the grammar cannot parse: judged where it runs
   "cd .. && git --git-dir=tree/.git --work-tree=tree checkout -- .",
-  "cd .. && GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", // the dispatcher hands the judge `prefix`
+  // the dispatcher hands the judge `prefix`
+  "cd .. && GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd",
   // Within the floor: a command reached through a pipe-to-shell, a here-string, xargs running git,
-  // a find -exec running a shell or git, a failed cd, and wrappers (flock, builtin, env -C, a deep
-  // chain).
+  // a find -exec running a shell or git, a failed cd, and the wrappers flock, builtin and env -C.
   "echo 'rm -rf wip' | bash",
   "bash <<< 'rm -rf wip'",
   "bash -ce 'rm -rf wip'",
@@ -944,7 +947,8 @@ describe("the hook: loud shapes ask the main thread and are denied to a subagent
 describe("the hook: a delete behind a heredoc, `command`, `exec` or nested evals", () => {
   // Each is valid bash that deletes (or the control that must not), driven through the real hook.
   const asks = [
-    "[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]", // a command hidden in $( ) under [[ ]], not arithmetic
+    // a command hidden in $( ) under [[ ]], not arithmetic
+    "[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]",
     "sh -c 'cat <<EOF; rm -rf wip\nbody\nEOF'", // the unparsed span is in the nested payload
     "command rm -v -rf wip", // -v is rm's flag, not `command`'s lookup
     "exec rm -rf wip",
@@ -1055,7 +1059,7 @@ const LOUD_HIDDEN = [
   ["S=build; read S <<< wip; rm -rf $S", FALLBACK],
   ["eval 'cat <<EOF; rm -rf wip\nbody\nEOF'", FALLBACK],
   ["git checkout-index --stdin --force < list.txt", EDIT],
-  // Payloads within payloads are followed to the command, up to a depth, and judged where they run past it.
+  // Payloads within payloads are followed up to a depth; past it, they are judged where they run.
   [`${"eval ".repeat(15)}rm -rf wip`, WIP],
   [`${"eval ".repeat(16)}rm -rf wip`, TOO_DEEP],
   // A documented limit: a directory something other than mkdir makes in the call is not known to
@@ -1101,7 +1105,7 @@ const LOUD_HIDDEN = [
     "for f in a b c d e f g h rm; do $f -rf wip; done",
     { names: /more values than this guard follows/ },
   ],
-  // Two expansions that multiply past the limit: a wrapper that may be one of three, a program one of five.
+  // Expansions that multiply past the limit: a wrapper that is one of three, a program one of five.
   [
     "if true; then W=sudo; else W=nice; fi; for f in a b c d rm; do $W $f -rf wip; done",
     { names: /more values than this guard follows/ },
@@ -1140,9 +1144,11 @@ const QUIET_LOOKALIKES = [
   "(R=rm); $R -rf wip", // set in a subshell, gone after it
   "R=rm; echo $R -rf wip", // a mention
   "R=rm; $R -f list.txt", // one file, plainly named, on the main thread
-  "G=git; $G add -A && rm -rf wip", // the add, read through its variable, put the files in the index
+  // the add, read through its variable, put the files in the index
+  "G=git; $G add -A && rm -rf wip",
   "C=command; $C -v rm -rf wip", // a lookup through a variable runs nothing
-  "W=sudo; $W git add -A && rm -rf wip", // the add runs under the wrapper, and still saves the files
+  // the add runs under the wrapper, and still saves the files
+  "W=sudo; $W git add -A && rm -rf wip",
   "git add -A; rm -rf wip", // a save that certainly ran
   "git add -A; rm list.txt; rm wip/notes.md", // saved before the deletes
   "env -C $UNSET_IN_THIS_CALL ls", // a directory it cannot read, and a program that deletes nothing
@@ -1182,7 +1188,8 @@ describe("the hook: commands that only look like a loss stay silent", () => {
   });
 
   it("knows `git clean -f` without -d leaves an untracked directory alone", async () => {
-    gitIn(tree, "add", "list.txt"); // the only untracked FILE; what is left untracked is wip/, a directory
+    // the only untracked FILE; what is left untracked is wip/, a directory
+    gitIn(tree, "add", "list.txt");
     assert.equal((await hook("git clean -f")).decision, "silent");
     assert.match((await hook("git clean -fd")).reason, /wip\/notes\.md/);
   });
@@ -1206,16 +1213,18 @@ describe("the hook: commands that only look like a loss stay silent", () => {
 //   tree/build/link       -> tree/wip           an ignored link into the work
 //   <parent>/linked                             a linked worktree holding scratch.txt
 //   <parent>/home                               an empty HOME
-const NOTES = { names: /back: wip\/notes\.md \(1 path/ }; // that file, once, by its name in its repository
+// that file, once, by its name in its repository
+const NOTES = { names: /back: wip\/notes\.md \(1 path/ };
 const SWEPT = { names: /wip\/deep\/plate\.png, wip\/notes\.md/, not: /src\/mod\.py/ };
 const LOUD_ELSEWHERE = [
   // `..` after a symlink is the parent of where the link points: the kernel resolves an operand.
   ["rm -rf outside/into/../notes.md", "..", NOTES],
   ["cd outside/into && rm -rf ../notes.md", "..", NOTES],
   ["cd wiplink/deep && cd .. && rm -rf deep", ".", DEEP],
-  ["cd -P outside/into && cd .. && rm -rf notes.md", "..", NOTES], // -P: the shell goes where the link points
+  // -P: the shell goes where the link points
+  ["cd -P outside/into && cd .. && rm -rf notes.md", "..", NOTES],
   ["cd -LP outside/into && cd .. && rm -rf notes.md", "..", NOTES], // the last of -L and -P wins
-  // `set -P` makes every cd of that shell physical, for the shells that inherit it (driven, bash 5.2).
+  // `set -P` makes every cd of that shell physical, for the shells that inherit it (bash 5.2).
   ["set -P; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
   ["set -o physical; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
   ["set -eP; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
@@ -1223,16 +1232,20 @@ const LOUD_ELSEWHERE = [
   ["set -P; (cd outside/into && cd .. && rm -rf notes.md)", "..", NOTES],
   ["eval 'set -P'; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
   ["f() { set -P; }; f; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
-  ["if true; then set -P; fi; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES], // it may be on: both places
-  ["set -P; f() { cd outside/into && cd .. && rm -rf notes.md; }; f", "..", NOTES], // a function runs in this shell
-  ["set -P; eval 'cd outside/into && cd .. && rm -rf notes.md'", "..", NOTES], // and so does an eval
+  // it may be on: both places
+  ["if true; then set -P; fi; cd outside/into && cd .. && rm -rf notes.md", "..", NOTES],
+  // a function runs in this shell
+  ["set -P; f() { cd outside/into && cd .. && rm -rf notes.md; }; f", "..", NOTES],
+  // and so does an eval
+  ["set -P; eval 'cd outside/into && cd .. && rm -rf notes.md'", "..", NOTES],
   ["rm -rf build/link/", ".", SWEPT], // a trailing slash names the directory behind the link
   // A find that walks through a link deletes what is behind it.
   ["find wiplink/ -type f -delete", ".", SWEPT],
   ["find -L wiplink -type f -delete", ".", SWEPT],
   ["find -H wiplink -type f -delete", ".", SWEPT],
   ["find .. -name notes.md -delete", "src", NOTES], // rooted at the tree, from inside it
-  ["find .. -name notes.md -delete", ".", NOTES], // rooted above every repository: each victim is judged in its own
+  // rooted above every repository: each victim is judged in its own
+  ["find .. -name notes.md -delete", ".", NOTES],
   // The repository is named by where the command points, not by where it runs.
   [
     "env GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd",
@@ -1250,13 +1263,17 @@ const LOUD_ELSEWHERE = [
 ];
 
 const QUIET_ELSEWHERE = [
-  ["cd; rm -rf wip", ".", { HOME: "<parent>/home" }], // HOME holds no wip: the rm runs there, not here
-  ["cd outside/into && cd .. && rm -rf notes.md", ".."], // the shell's own `cd ..` is by name: it lands in outside
+  // HOME holds no wip: the rm runs there, not here
+  ["cd; rm -rf wip", ".", { HOME: "<parent>/home" }],
+  // the shell's own `cd ..` is by name: it lands in outside
+  ["cd outside/into && cd .. && rm -rf notes.md", ".."],
   ["cd -P -L outside/into && cd .. && rm -rf notes.md", ".."],
   ["set -P; set +P; cd outside/into && cd .. && rm -rf notes.md", ".."],
   ["set -P; set +o physical; cd outside/into && cd .. && rm -rf notes.md", ".."],
-  ["(set -P); cd outside/into && cd .. && rm -rf notes.md", ".."], // a subshell's setting ends with it
-  ["set -P; bash -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."], // a new shell starts without it
+  // a subshell's setting ends with it
+  ["(set -P); cd outside/into && cd .. && rm -rf notes.md", ".."],
+  // a new shell starts without it
+  ["set -P; bash -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."],
   ["set -P; echo x | xargs sh -c 'cd outside/into && cd .. && rm -rf notes.md'", ".."],
   [
     "set -P; find outside -maxdepth 0 -exec sh -c 'cd outside/into && cd .. && rm -rf notes.md' \\;",
@@ -1363,7 +1380,8 @@ const FLOORS = [
   "$(which rm) -rf wip",
   "read R <<< rm; $R -rf wip", // nor one a variable takes when the command runs
   "$UNSET_IN_THIS_CALL rm -rf wip", // nor a word that may or may not expand to nothing
-  "bash script.sh", // a script file handed to a shell: it is on disk, holds `rm -rf wip`, and is not opened
+  // a script file handed to a shell: it is on disk, holds `rm -rf wip`, and is not opened
+  "bash script.sh",
   "bash < script.sh",
   "cat script.sh | bash",
   "source script.sh",
@@ -1490,7 +1508,8 @@ describe("the hook: a repository inside the target is read", () => {
       /^RECOVERABLE: `find` .*vendor\/sub\/inflight\.md \(1 path/,
       swept.reason,
     );
-    assert.equal((await hook("find vendor -name a.txt -delete")).decision, "silent"); // committed: git gives it back
+    // committed: git gives it back
+    assert.equal((await hook("find vendor -name a.txt -delete")).decision, "silent");
   });
 
   it("a delete of an ignored directory names the work in a clone inside it", async () => {
@@ -1507,7 +1526,8 @@ describe("the hook: a repository inside the target is read", () => {
   it("a delete above the repository it runs in names the work in the others below it", async () => {
     const parent = join(tree, "..");
     cloneAt(join(parent, "other"), "theirs.md");
-    gitIn(tree, "stash", "push", "-u", "-q"); // nothing dirty here, so the reason has room for the other's
+    // nothing dirty here, so the reason has room for the other's
+    gitIn(tree, "stash", "push", "-u", "-q");
     const swept = await hook(`rm -rf ${parent}`);
     assert.match(swept.reason, /^RECOVERABLE: `rm` would destroy /, swept.reason);
     assert.match(
@@ -1524,14 +1544,16 @@ describe("the hook: a repository inside the target is read", () => {
       mkdirSync(join(tree, "build", "pad", `d${i}`), { recursive: true });
     cloneAt(join(tree, "build", "deep", "a", "b", "clone"), "patched.md");
     assert.equal((await hook("rm -rf build")).decision, "silent");
-    assert.match((await hook("rm -rf build/deep")).reason, /build\/deep\/a\/b\/clone\/patched\.md/); // within reach from here
+    // within reach from here
+    assert.match((await hook("rm -rf build/deep")).reason, /build\/deep\/a\/b\/clone\/patched\.md/);
   });
 
   it("reads a directory only up to its budget, and finds a `.git` without reading for it", () => {
     const wide = join(tree, "build", "wide");
     for (let i = 0; i < 30; i += 1) mkdirSync(join(wide, `d${i}`), { recursive: true });
     for (let i = 0; i < 5; i += 1) writeFileSync(join(wide, `f${i}`), "");
-    symlinkSync(join(tree, "wip"), join(wide, "link")); // a link to a directory is not a directory to walk
+    // a link to a directory is not a directory to walk
+    symlinkSync(join(tree, "wip"), join(wide, "link"));
     writeFileSync(join(wide, ".git"), "gitdir: elsewhere\n");
     const whole = listDirectories(wide, 1000);
     assert.equal(whole.read, 37);
@@ -1629,14 +1651,17 @@ const LOUD_LIMITS = [
   ["(git add -A &); rm -rf wip", WIP], // the subshell exits at once, its job still running
   ["sh -c 'git add -A' & rm -rf wip", WIP],
   ["git stash push -u -q | rm -rf wip", WIP],
-  ["git add -A & sleep 1 & wait $!; rm -rf wip", WIP], // `$!` is the sleep: the add was not waited for
+  // `$!` is the sleep: the add was not waited for
+  ["git add -A & sleep 1 & wait $!; rm -rf wip", WIP],
   ["git add -A & wait -n; rm -rf wip", WIP], // one job, and which one is not knowable
-  ["(git add -A &); wait; rm -rf wip", WIP], // a job the subshell orphaned: the outer wait is not its shell's
+  // a job the subshell orphaned: the outer wait is not its shell's
+  ["(git add -A &); wait; rm -rf wip", WIP],
   ["sh -c 'git add -A' | rm -rf wip", WIP], // a payload's save races its carrier's pipeline too
   ["git add -A & false && wait; rm -rf wip", WIP], // a wait that may not run waits for nothing
-  // The first delete had the save; the second, in another stage, did not (and is judged where it runs).
+  // The first delete had the save. The second, in another stage, did not: judged where it runs.
   ["(git add -A; rm -rf $X1) | rm -rf $X2", { names: /this guard cannot read.*wip\/notes\.md/ }],
-  ["git add -A | rm list.txt; rm wip/notes.md", { names: /list\.txt/ }], // two one-file deletes, one racing the add
+  // two one-file deletes, one racing the add
+  ["git add -A | rm list.txt; rm wip/notes.md", { names: /list\.txt/ }],
   // A program word is followed through eight readings, and at nine is judged where it runs. Two
   // variables multiply: three wrappers by three programs is nine.
   ["for W in sudo nice; do for f in a b c rm; do $W $f -rf wip; done; done", WIP],
@@ -1670,8 +1695,9 @@ describe("the hook: past its limits, it asks, naming what is lost", () => {
     });
   }
 
-  // Too many places end when a cd names one place again: the delete is judged there, by name. `cd /`
-  // alone cannot show it (nothing under / is lost either way), so this cd goes back into the tree.
+  // Too many places end when a cd names one place again: the delete is judged there, by name.
+  // `cd /` alone cannot show it, since nothing under / is lost either way, so this cd goes back
+  // into the tree.
   it("a cd to one certain place ends the overflow", async () => {
     const command = `cd n1; cd n2; cd n3; cd wip; cd '${tree}'; rm -rf wip`;
     const main = await hook(command);
@@ -1851,12 +1877,14 @@ const LOUD_WRAPPERS = [
   ["unshare -r -w wip rm -rf deep", DEEP], // -w changes the directory the command runs in
   ["unshare --wd=wip rm -rf deep", DEEP],
   ["strace -f -o /dev/null rm -rf wip", WIP],
-  ["cd .. && strace -E GIT_DIR=tree/.git -E GIT_WORK_TREE=tree git checkout -- .", EDIT], // -E sets its environment
+  // -E sets its environment
+  ["cd .. && strace -E GIT_DIR=tree/.git -E GIT_WORK_TREE=tree git checkout -- .", EDIT],
   ["chrt 10 rm -rf wip", WIP],
   ["chrt -f 10 rm -rf wip", WIP],
 ];
 const QUIET_WRAPPERS = [
-  String.raw`env -S 'rm -rf \q wip'`, // an escape env does not know: it refuses the string, nothing runs
+  // an escape env does not know: it refuses the string, nothing runs
+  String.raw`env -S 'rm -rf \q wip'`,
   `env -S 'rm -rf "wip'`, // an unterminated quote: refused too
   "numactl --show",
   "strace -p 1234", // attaches to a running process, starts nothing
@@ -1883,15 +1911,17 @@ describe("the hook: env -S and four more wrappers", () => {
 });
 
 // cd, as bash takes it. Driven in bash 5.2: a relative target not written `./…` or `../…` is looked
-// for along CDPATH, in order (an empty entry is the current directory), and in the current directory
-// only when none has it; a directory without search permission refuses the cd.
+// for along CDPATH, in order (an empty entry is the current directory), and in the current
+// directory only when none has it; a directory without search permission refuses the cd.
 describe("the hook: cd follows CDPATH, and a cd it cannot enter may fail", () => {
   for (const [command, env] of [
     ["CDPATH=wip; cd deep && rm -rf *", {}],
     ["export CDPATH=wip; cd deep && rm -rf *", {}],
-    ["CDPATH=:wip; cd deep && rm -rf *", {}], // the current directory first: no deep there, so wip/deep
+    // the current directory first: no deep there, so wip/deep
+    ["CDPATH=:wip; cd deep && rm -rf *", {}],
     ["CDPATH=nope:wip; cd deep && rm -rf *", {}], // an entry with no match is passed over
-    ["cd deep && rm -rf *", { CDPATH: "wip" }], // exported to the session: the hook's own environment
+    // exported to the session: the hook's own environment
+    ["cd deep && rm -rf *", { CDPATH: "wip" }],
   ]) {
     it(`follows CDPATH: ${command}${env.CDPATH ? " (CDPATH=wip in the environment)" : ""}`, async () => {
       const main = await hook(command, { env });
