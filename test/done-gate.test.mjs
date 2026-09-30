@@ -83,8 +83,8 @@ describe("DONE-GATE lets the stop through", () => {
   });
 
   it("when pipefail makes the piped run's exit status real", async () => {
-    // Round 2 (Fable): with pipefail the pipeline's status IS pytest's, so a failure is reported
-    // by its exit code. Before, the pipe rule was dead code and this read as a hidden status.
+    // With pipefail the pipeline's status IS pytest's, so a failure is reported by its exit code,
+    // not read as a status the pipe hid.
     const failing = [
       edit("/w/a.py"),
       bash("set -o pipefail; pytest | tail -1", { output: "Exit code 1\n1 failed", error: true }),
@@ -226,7 +226,7 @@ describe("recognising a test run", () => {
   });
 });
 
-describe("round 1 of review: DONE-GATE", () => {
+describe("DONE-GATE: which claims, failures and test runs it reads", () => {
   const edited = [edit("/w/src/app.py")];
 
   for (const final of [
@@ -316,7 +316,7 @@ describe("round 1 of review: DONE-GATE", () => {
   });
 });
 
-describe("round 1b: DONE-GATE", () => {
+describe("DONE-GATE: unparsed commands, honest admissions, edits made from the shell", () => {
   it("says so when a command since the edit could not be parsed", async () => {
     // Valid bash that runs pytest; the grammar cannot parse a heredoc opened before `;`.
     const steps = [
@@ -461,8 +461,8 @@ describe("round 1b: DONE-GATE", () => {
   }
 
   // Each write comes AFTER a passing run, so reading it as an edit leaves an edit with no test
-  // after it, and the stop is refused. (With the write in the same call as the run, as this test
-  // once was, the run cleared it whatever it was called: round 2, Opus 5.)
+  // after it, and the stop is refused. (In the same call as the run, the run would clear the
+  // write whatever it was read as, and the test could not fail.)
   for (const command of [
     "cat out | tee test-output",
     "cat out > report.json",
@@ -482,7 +482,7 @@ describe("round 1b: DONE-GATE", () => {
   });
 });
 
-describe("DONE-GATE, round 2 of review", () => {
+describe("DONE-GATE: sed scripts, statuses a pipe cannot hide, claims in passing", () => {
   const refused = async (steps, final = "Done.") =>
     (await verdict(stop(steps, final)))?.feedback ?? "";
 
@@ -564,8 +564,7 @@ describe("DONE-GATE, round 2 of review", () => {
   });
 });
 
-// Round 3's MINORs (Opus 5 alone, #13; the chair, #12), each driven through the hook first.
-describe("DONE-GATE, round 3 MINORs", () => {
+describe("DONE-GATE: claim words inside names, the shell's own pipefail, edits by copy", () => {
   const refused = async (steps, final = "Done.") =>
     (await verdict(stop(steps, final)))?.feedback ?? "";
 
@@ -633,7 +632,7 @@ describe("DONE-GATE, round 3 MINORs", () => {
       assert.match(await refused([bash(command)]), what);
     });
   }
-  it("sees a test run behind a wrapper the table learned in round 3: strace -f pytest", async () => {
+  it("sees a test run behind a wrapper: strace -f pytest", async () => {
     assert.equal(
       await refused([
         edit("/w/a.py"),

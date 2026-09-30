@@ -197,8 +197,8 @@ describe("a stray error after the answer", () => {
     import { ${entry} } from ${JSON.stringify(runner)};
     await ${entry}("TEST", async () => ({
       judge: async () => {
-        // Rejected only once the answer is on its way out: the case the title names. (Round 2,
-        // Fable: these once fired before the return, so the failure path answered instead.)
+        // Rejected only once the answer is on its way out: the case the title names. (Fired before
+        // the return, they would reach the failure path, and the test would not be about this.)
         setTimeout(() => Promise.reject(new Error("stray one")), 0);
         setTimeout(() => Promise.reject(new Error("stray two")), 5);
         return ${answer};

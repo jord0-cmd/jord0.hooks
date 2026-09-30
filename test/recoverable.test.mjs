@@ -268,7 +268,7 @@ describe("judges: asking git without running the repository's programs", () => {
 
   // A partial clone keeps some objects on its promisor remote, and git fetches one the moment
   // anything reads it, `git status` included. The fetch runs the transport the REPOSITORY's
-  // config names. Round 2 drove both of these to a run on git 2.47 before the pins existed.
+  // config names. Both were driven to a run on git 2.47 before the pins existed.
   for (const [transport, config] of [
     [
       "core.sshCommand over an ssh URL",
@@ -417,7 +417,7 @@ describe("judges: asking git without running the repository's programs", () => {
   });
 });
 
-describe("judges: round 1 of review", () => {
+describe("judges: symlinks, pathspecs, and the history a delete takes", () => {
   it("asks through a symlinked working directory", async () => {
     const link = join(tree, "..", "link");
     symlinkSync(tree, link);
@@ -426,7 +426,7 @@ describe("judges: round 1 of review", () => {
   });
 
   it("reads an unreadable pathspec as the whole tree after its flags, an unreadable repository where it runs", async () => {
-    // Round 2: an unreadable pathspec used to fall back before the flags were read, so
+    // An unreadable pathspec used to fall back before the flags were read, so
     // `restore --staged` and `rm --cached` fed by xargs asked. Now the flags decide first, and
     // the reason names what the command itself loses, not everything dirty where it runs.
     const v1 = await judges.git(["git", "checkout", "--", "$(git diff --name-only)"], ctx());
@@ -492,7 +492,7 @@ describe("judges: round 1 of review", () => {
   });
 });
 
-describe("judges: round 1b (the missing-lens seat)", () => {
+describe("judges: globs, printing finds, git clean -d, worktrees", () => {
   for (const argv of [
     ["git", "checkout", "--", "*.py"],
     ["git", "checkout", "HEAD", "--", "*.py"],
@@ -778,7 +778,7 @@ const LOUD = [
   "find $(echo wip) -delete",
   "git checkout -- src/mod.py",
   "cd wip && rm -rf deep",
-  // Verifier round 2 on the fleet guard: every one of these walked past a regex segmenter.
+  // Every one of these walks past a guard that splits the command with a regex.
   "( rm -rf wip )",
   "(rm -rf wip)",
   "find wip -exec env rm -rf {} +",
@@ -809,7 +809,7 @@ const LOUD = [
   "git checkout-index -f -a",
   "git rm -f src/mod.py",
   "git rm -rf src",
-  // Round 1b: statements behind bash's reserved words, and commands a redirection runs.
+  // Statements behind bash's reserved words, and commands a redirection runs.
   "time ( rm -rf wip )",
   "time { rm -rf wip; }",
   "coproc ( rm -rf wip )",
@@ -818,9 +818,9 @@ const LOUD = [
   "cat <<EOF; rm -rf wip\nbody\nEOF", // valid bash the grammar cannot parse: judged where it runs
   "cd .. && git --git-dir=tree/.git --work-tree=tree checkout -- .",
   "cd .. && GIT_DIR=tree/.git GIT_WORK_TREE=tree git clean -fd", // the dispatcher hands the judge `prefix`
-  // Within the floor, found by a fresh-context review: a command reached through a pipe-to-shell,
-  // a here-string, xargs running git, a find -exec running a shell or git, a failed cd, and
-  // wrappers (flock, builtin, env -C, a deep chain).
+  // Within the floor: a command reached through a pipe-to-shell, a here-string, xargs running git,
+  // a find -exec running a shell or git, a failed cd, and wrappers (flock, builtin, env -C, a deep
+  // chain).
   "echo 'rm -rf wip' | bash",
   "bash <<< 'rm -rf wip'",
   "bash -ce 'rm -rf wip'",
@@ -867,7 +867,7 @@ const QUIET = [
   "find . -name '*.log' -exec sh -c 'echo {}' ;",
   "flock -w 5 lock ls",
   "bash script.sh",
-  // Safe commands the routing must never start asking about (fresh-context review, round 2).
+  // Safe commands the routing must never start asking about.
   'cd "$(mktemp -d)" && rm -rf *',
   "mkdir -p scratch && cd scratch && rm -rf *",
   "git ls-files --deleted | xargs git restore --staged",
@@ -941,7 +941,7 @@ describe("the hook: loud shapes ask the main thread and are denied to a subagent
   });
 });
 
-describe("the hook: shapes a fresh-context review turned up", () => {
+describe("the hook: a delete behind a heredoc, `command`, `exec` or nested evals", () => {
   // Each is valid bash that deletes (or the control that must not), driven through the real hook.
   const asks = [
     "[[ -n $(cat <<EOF; rm -rf wip\nbody\nEOF\n) ]]", // a command hidden in $( ) under [[ ]], not arithmetic
@@ -976,10 +976,10 @@ describe("the hook: quiet shapes stay silent in a dirty tree", () => {
   }
 });
 
-// ── round 2 of review (a bench of five, Opus 5 alone, one Fable pass) ──────────────────────────
+// ── deletes hidden in wrappers, shells, variables and pipes, and their look-alikes ──────────────
 // Every shape below was driven against the hook before its fix: a silent loss, or a false alarm.
 
-const LOUD_ROUND_2 = [
+const LOUD_HIDDEN = [
   // Wrappers the one shared table now sees through.
   ["env -S 'rm -rf wip'", WIP],
   ["env --split-string='rm -rf wip'", WIP],
@@ -1080,7 +1080,7 @@ const LOUD_ROUND_2 = [
   ["S=bash; $S -c 'rm -rf wip'", WIP],
   ["if true; then R=rm; else R=ls; fi; $R -rf wip", WIP], // either may run: each is judged
   ["for p in ls rm; do $p -rf wip; done", WIP],
-  // Round 3. A save that may not run saves nothing; a save's paths are read where it ran.
+  // A save that may not run saves nothing; a save's paths are read where it ran.
   ["false && git add -A; rm -rf wip", WIP],
   ["if false; then git add -A; fi\nrm -rf wip", WIP],
   ["true || git stash push -u -q; rm -rf wip", WIP],
@@ -1108,8 +1108,8 @@ const LOUD_ROUND_2 = [
   ],
   // A stash that may run before a drop: the drop may take what it stashed.
   ["true && git stash push -u -q; git stash drop", { names: /src\/mod\.py/ }],
-  // Opus 5, round 3. rm's flags are read after expansion; a later save does not reach back;
-  // a file a find or xargs feeds is not a plainly named one; a directory it cannot read is judged.
+  // rm's flags are read after expansion; a later save does not reach back; a file a find or xargs
+  // feeds is not a plainly named one; a directory it cannot read is judged.
   ["F=-rf; rm $F wip", WIP],
   ["rm list.txt; rm wip/notes.md; git add -A", { names: /list\.txt, wip\/notes\.md/ }],
   ["find wip -name notes.md -exec sh -c 'rm \"$1\"' _ {} \\;", { names: /wip\/notes\.md/ }],
@@ -1117,7 +1117,7 @@ const LOUD_ROUND_2 = [
   ["env -C $UNSET_IN_THIS_CALL rm -rf wip", { names: /whose directory this guard cannot read/ }],
 ];
 
-const QUIET_ROUND_2 = [
+const QUIET_LOOKALIKES = [
   "git clean -fd does-not-exist",
   "git checkout-index -f -a --prefix=/tmp/export/",
   "git add -A && rm -rf wip", // the index holds it: `git restore` brings it back
@@ -1148,8 +1148,8 @@ const QUIET_ROUND_2 = [
   "env -C $UNSET_IN_THIS_CALL ls", // a directory it cannot read, and a program that deletes nothing
 ];
 
-describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
-  for (const [command, { names, not }] of LOUD_ROUND_2) {
+describe("the hook: a hidden delete asks, naming exactly what it loses", () => {
+  for (const [command, { names, not }] of LOUD_HIDDEN) {
     it(JSON.stringify(command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
@@ -1161,8 +1161,8 @@ describe("the hook: round 2 shapes ask, naming exactly what they lose", () => {
   }
 });
 
-describe("the hook: round 2 false alarms stay silent", () => {
-  for (const command of QUIET_ROUND_2) {
+describe("the hook: commands that only look like a loss stay silent", () => {
+  for (const command of QUIET_LOOKALIKES) {
     it(JSON.stringify(command), async () => {
       const { decision, reason } = await hook(command);
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
@@ -1605,19 +1605,20 @@ describe("the hook: a very large dirty tree", () => {
   });
 });
 
-// Round 3's MINORs (Opus 5 alone, and the chair), each driven through the hook before it was fixed
-// (`round3-tools/probe19.mjs`). A chain of functions: `f0(){ f1; }; …; f{n-1}(){ rm -rf wip; }; f0`.
+// The limits: how deep function calls are followed, how many places a command may be in, and
+// whether a save has finished before the delete it covers. Each shape was driven through the
+// hook before it was fixed. A chain of functions: `f0(){ f1; }; …; f{n-1}(){ rm -rf wip; }; f0`.
 const functionChain = (n) =>
   `${Array.from({ length: n }, (_, i) => (i === n - 1 ? `f${i}(){ rm -rf wip; }` : `f${i}(){ f${i + 1}; }`)).join("; ")}; f0`;
 const NARROW = { names: /whose directory this guard cannot narrow down.*wip\/notes\.md/ };
 
-const LOUD_MINORS = [
-  // Function calls stop where payloads stop, fifteen deep, and say so past it (Opus 5 #8).
+const LOUD_LIMITS = [
+  // Function calls stop where payloads stop, fifteen deep, and say so past it.
   [functionChain(15), WIP],
   [functionChain(16), TOO_DEEP],
   [functionChain(17), TOO_DEEP],
-  // Three cds that may fail and one that may not leave sixteen places, more than it keeps (Opus 5
-  // #10). bash runs the rm in wip; the dropped place must not be the silent one.
+  // Three cds that may fail and one that may not leave sixteen places, more than it keeps. bash
+  // runs the rm in wip; the dropped place must not be the silent one.
   ["cd n1; cd n2; cd n3; cd wip; rm -rf notes.md", NARROW],
   ["cd n1; cd n2; cd n3; cd wip; f(){ rm -rf notes.md; }; f", NARROW],
   ["cd n1; cd n2; cd n3; cd wip; cd deep; rm -rf ../notes.md", NARROW],
@@ -1645,7 +1646,7 @@ const LOUD_MINORS = [
   ],
 ];
 
-const QUIET_MINORS = [
+const QUIET_LIMITS = [
   "cd n1; cd n2; cd n3; cd wip; ls", // too many places, and a program that deletes nothing
   "cd n1; cd n2; cd n3; cd wip; cd /; rm -rf wip", // one place again: / has no wip
   "git add -A & wait; rm -rf wip", // the shell waited for its jobs: the add finished first
@@ -1657,8 +1658,8 @@ const QUIET_MINORS = [
   "sh -c 'git add -A; rm -rf wip' | cat",
 ];
 
-describe("the hook: round 3 MINORs ask, naming what they lose", () => {
-  for (const [command, { names, not }] of LOUD_MINORS) {
+describe("the hook: past its limits, it asks, naming what is lost", () => {
+  for (const [command, { names, not }] of LOUD_LIMITS) {
     it(JSON.stringify(command.length > 90 ? `${command.slice(0, 87)}...` : command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
@@ -1681,8 +1682,8 @@ describe("the hook: round 3 MINORs ask, naming what they lose", () => {
   });
 });
 
-describe("the hook: round 3 MINORs' neighbours stay silent", () => {
-  for (const command of QUIET_MINORS) {
+describe("the hook: within its limits, the same shapes stay silent", () => {
+  for (const command of QUIET_LIMITS) {
     it(JSON.stringify(command), async () => {
       const { decision, reason } = await hook(command);
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
@@ -1690,18 +1691,18 @@ describe("the hook: round 3 MINORs' neighbours stay silent", () => {
   }
 });
 
-// rm without -r refuses a directory, fed or named (Opus 5 #17).
-const LOUD_MINORS_B = [
+// rm without -r refuses a directory, fed or named.
+const LOUD_RM_DIRS = [
   ["echo wip wip/notes.md | xargs rm", { names: /wip\/notes\.md/, not: /plate\.png/ }],
   ["echo wip | xargs rm -r", WIP],
 ];
-const QUIET_MINORS_B = [
+const QUIET_RM_DIRS = [
   "echo wip | xargs rm", // rm: cannot remove 'wip': Is a directory
   "find wip -maxdepth 0 | xargs rm",
 ];
 
-describe("the hook: round 3 MINORs in the judges", () => {
-  for (const [command, { names, not }] of LOUD_MINORS_B) {
+describe("the hook: rm without -r, a stray .git, repository names, and the walk", () => {
+  for (const [command, { names, not }] of LOUD_RM_DIRS) {
     it(JSON.stringify(command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
@@ -1710,7 +1711,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
       if (not) assert.doesNotMatch(main.reason, not, main.reason);
     });
   }
-  for (const command of QUIET_MINORS_B) {
+  for (const command of QUIET_RM_DIRS) {
     it(JSON.stringify(command), async () => {
       const { decision, reason } = await hook(command);
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
@@ -1726,7 +1727,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     if (name) writeFileSync(join(dir, name), "in flight\n");
   };
 
-  it("reads past a stray `.git` file inside the target, and names the real loss (Opus 5 #12)", async () => {
+  it("reads past a stray `.git` file inside the target, and names the real loss", async () => {
     mkdirSync(join(tree, "wip", "a"));
     writeFileSync(join(tree, "wip", "a", ".git"), "not a gitfile\n");
     const main = await hook("rm -rf wip");
@@ -1759,7 +1760,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     }
   });
 
-  it("names a repository deleted by name the way it names one found below the target (chair #10)", async () => {
+  it("names a repository deleted by name the way it names one found below the target", async () => {
     repoAt(join(tree, "build", "sub"), "ndirty.txt");
     for (const command of ["rm -rf build/sub", "rm -rf build"]) {
       const { reason } = await hook(command);
@@ -1777,7 +1778,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     assert.match((await hook("rm -rf build/sub")).reason, /build\/sub\/deeper\/d\.txt/);
   });
 
-  it("says so when the search for repositories stopped before the end (chair #7)", async () => {
+  it("says so when the search for repositories stopped before the end", async () => {
     for (let i = 0; i < 2100; i += 1)
       mkdirSync(join(tree, "build", "many", `d${String(i).padStart(4, "0")}`), { recursive: true });
     const cut = await hook("rm -rf build wip");
@@ -1797,7 +1798,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     );
   });
 
-  it("says so when the search ran out of entries to read in one wide directory (chair #7)", async () => {
+  it("says so when the search ran out of entries to read in one wide directory", async () => {
     const flat = join(tree, "wip", "flat");
     mkdirSync(flat);
     for (let i = 0; i < 20_001; i += 1) writeFileSync(join(flat, `f${i}`), "");
@@ -1809,7 +1810,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     );
   });
 
-  it("asks git each question once per Bash call (Opus 5 #14)", async () => {
+  it("asks git each question once per Bash call", async () => {
     const trace = join(tree, "..", "git-trace");
     const env = { GIT_TRACE: trace };
     // Three judges, three different questions of one place: one git status answers all of them.
@@ -1823,7 +1824,7 @@ describe("the hook: round 3 MINORs in the judges", () => {
     assert.equal(statuses.length, 1, statuses.join("\n"));
   });
 
-  it("answers 150 unreadable deletes on a 2,000-directory tree well inside its budget (Opus 5 #14)", async () => {
+  it("answers 150 unreadable deletes on a 2,000-directory tree well inside its budget", async () => {
     // Driven before the fix: 60 took 6 s, 100 went over the 8 s budget. After it: 150 in 0.25 s.
     for (let i = 0; i < 2000; i += 1) {
       const dir = join(tree, "wip", "many", `d${i}`);
@@ -1838,10 +1839,10 @@ describe("the hook: round 3 MINORs in the judges", () => {
   });
 });
 
-// env -S decodes as GNU env does (Opus 5 #11), and four wrappers are followed (chair NIT). Each
-// shape was driven against coreutils 9.7 env, util-linux 2.40 and each tool's own --help; each env
-// row below reads differently under the old decoder, which honoured quotes and `\x` only.
-const LOUD_MINORS_C = [
+// env -S decodes as GNU env does, and four more wrappers are followed. Each shape was driven
+// against coreutils 9.7 env, util-linux 2.40 and each tool's own --help; each env row below reads
+// differently under the old decoder, which honoured quotes and `\x` only.
+const LOUD_WRAPPERS = [
   [String.raw`env -S 'rm\_-rf\_wip'`, WIP], // `\_` separates words: really runs rm -rf wip
   [String.raw`env -S 'rm -rf wip\c trailing'`, WIP], // `\c` ends the string
   ["numactl --cpunodebind=0 rm -rf wip", WIP],
@@ -1854,7 +1855,7 @@ const LOUD_MINORS_C = [
   ["chrt 10 rm -rf wip", WIP],
   ["chrt -f 10 rm -rf wip", WIP],
 ];
-const QUIET_MINORS_C = [
+const QUIET_WRAPPERS = [
   String.raw`env -S 'rm -rf \q wip'`, // an escape env does not know: it refuses the string, nothing runs
   `env -S 'rm -rf "wip'`, // an unterminated quote: refused too
   "numactl --show",
@@ -1863,8 +1864,8 @@ const QUIET_MINORS_C = [
   "chrt -m",
 ];
 
-describe("the hook: round 3 MINORs in the wrapper table", () => {
-  for (const [command, { names, not }] of LOUD_MINORS_C) {
+describe("the hook: env -S and four more wrappers", () => {
+  for (const [command, { names, not }] of LOUD_WRAPPERS) {
     it(JSON.stringify(command), async () => {
       const main = await hook(command);
       assert.equal(main.decision, "ask", `${command} → ${main.decision}`);
@@ -1873,7 +1874,7 @@ describe("the hook: round 3 MINORs in the wrapper table", () => {
       if (not) assert.doesNotMatch(main.reason, not, main.reason);
     });
   }
-  for (const command of QUIET_MINORS_C) {
+  for (const command of QUIET_WRAPPERS) {
     it(JSON.stringify(command), async () => {
       const { decision, reason } = await hook(command);
       assert.equal(decision, "silent", `${command} → ${decision}: ${reason}`);
@@ -1881,10 +1882,10 @@ describe("the hook: round 3 MINORs in the wrapper table", () => {
   }
 });
 
-// cd, as bash takes it (Opus 5 #16, chair #9). Driven in bash 5.2: a relative target not written
-// `./…` or `../…` is looked for along CDPATH, in order (an empty entry is the current directory), and
-// the current directory only when none has it; a directory without search permission refuses the cd.
-describe("the hook: round 3 MINORs in cd", () => {
+// cd, as bash takes it. Driven in bash 5.2: a relative target not written `./…` or `../…` is looked
+// for along CDPATH, in order (an empty entry is the current directory), and in the current directory
+// only when none has it; a directory without search permission refuses the cd.
+describe("the hook: cd follows CDPATH, and a cd it cannot enter may fail", () => {
   for (const [command, env] of [
     ["CDPATH=wip; cd deep && rm -rf *", {}],
     ["export CDPATH=wip; cd deep && rm -rf *", {}],

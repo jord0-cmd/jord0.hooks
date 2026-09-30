@@ -27,7 +27,7 @@ before(() => {
   script("noext", "#!/usr/bin/env bash\necho ran\n");
   mkdirSync(join(dir, "sub"));
   script("sub/inner.sh", "#!/bin/sh\necho inner\n");
-  // Round 1 of review: files that only TALK about help, and files whose code handles it.
+  // Files that only TALK about help, and files whose code handles it.
   script("says-no.sh", "#!/bin/sh\n# NOTE: this script does NOT support --help.\necho ran\n");
   script("fire.sh", "#!/bin/sh\n# fire and forget\necho ran\n");
   script(
@@ -44,7 +44,7 @@ before(() => {
   // A handler that has been commented out is not a handler.
   script("commented.sh", '#!/bin/sh\n# case "$1" in\n#   -h|--help) usage ;;\n# esac\necho ran\n');
   script("commented.py", "# import argparse\nprint('ran')\n");
-  // Round 1b: a handler in a trailing comment or a usage string is not a handler.
+  // A handler in a trailing comment or a usage string is not a handler.
   script(
     "trailing.sh",
     '#!/bin/bash\nset -euo pipefail\ndeploy_everything "$@"   # case "$1" in -h|--help) usage;; esac\n',
@@ -59,11 +59,11 @@ before(() => {
     "hash-in-string.sh",
     '#!/bin/sh\necho "# not a comment"\ncase "$1" in\n  --help | -h ) echo usage ;;\nesac\n',
   );
-  // Round 1b: bash runs an executable text file with no `#!` as a shell script.
+  // bash runs an executable text file with no `#!` as a shell script.
   script("legacy", "echo no shebang here\necho ran\n");
   writeFileSync(join(dir, "notexec"), "echo ran\n"); // not executable: bash refuses to run it
   script("compiled", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0]));
-  // Round 1b: wrappers that hand the flag to a CLI that answers it, known by the call they make.
+  // Wrappers that hand the flag to a CLI that answers it, known by the call they make.
   mkdirSync(join(dir, "django"));
   script(
     "django/manage.py",
@@ -186,7 +186,7 @@ describe("reading an earlier probe does not count as reading the script", () => 
   });
 });
 
-describe("round 1 of review: text about help is not code that handles it", () => {
+describe("text about help is not code that handles it", () => {
   for (const command of [
     "./says-no.sh --help",
     "./fire.sh --help",
@@ -210,7 +210,7 @@ describe("round 1 of review: text about help is not code that handles it", () =>
   }
 });
 
-describe("round 1 of review: a search pattern is not a read", () => {
+describe("a search pattern is not a read", () => {
   it("does not count grep's pattern as reading the script", async () => {
     assert.equal((await decide("grep deploy.sh notes.txt; ./deploy.sh --help")).decision, "deny");
     assert.equal((await decide("rg deploy.sh; ./deploy.sh --help")).decision, "deny");
@@ -224,7 +224,7 @@ describe("round 1 of review: a search pattern is not a read", () => {
   });
 });
 
-describe("round 1 of review: spellings that used to walk past", () => {
+describe("a help probe spelled another way", () => {
   for (const command of [
     "nice -n 5 ./deploy.sh --help",
     "env -u HOME ./deploy.sh --help",
@@ -256,7 +256,7 @@ describe("round 1 of review: spellings that used to walk past", () => {
   });
 });
 
-describe("round 1b: only code that handles the flag counts", () => {
+describe("only code that handles the flag counts", () => {
   for (const command of [
     "./trailing.sh --help",
     "./usage-string.sh --help",
@@ -273,7 +273,7 @@ describe("round 1b: only code that handles the flag counts", () => {
   }
 });
 
-describe("round 1b: a wrapper that hands the flag on", () => {
+describe("a wrapper that hands the flag on", () => {
   for (const command of ["./gradlew --help", "cd django && python3 manage.py --help"]) {
     it(`stays silent for ${command}`, async () => {
       assert.equal((await decide(command)).decision, "silent");
@@ -284,7 +284,7 @@ describe("round 1b: a wrapper that hands the flag on", () => {
   });
 });
 
-describe("round 1b: a script with no #!", () => {
+describe("a script with no #!", () => {
   // `bash notexec` runs it though it has no #! and no exec bit: the interpreter opens it.
   for (const command of [
     "./legacy --help",
@@ -303,7 +303,7 @@ describe("round 1b: a script with no #!", () => {
   }
 });
 
-describe("round 1b: a command the grammar cannot parse", () => {
+describe("a command the grammar cannot parse", () => {
   // Valid bash that runs the probe; the grammar cannot parse a heredoc opened before `;`.
   const hidden = "cat <<EOF; ./deploy.sh --help\nbody\nEOF";
 
@@ -326,7 +326,7 @@ describe("round 1b: a command the grammar cannot parse", () => {
   });
 });
 
-describe("round 1 of review: which read vouches for which script", () => {
+describe("which read vouches for which script", () => {
   it("a local read never vouches for a remote script of the same name", async () => {
     const history = [{ tool: "Read", input: { file_path: join(dir, "gen-config.sh") } }];
     assert.equal((await decide("ssh box './gen-config.sh --help'", history)).decision, "deny");
@@ -348,7 +348,7 @@ describe("round 1 of review: which read vouches for which script", () => {
   });
 });
 
-describe("round 1 of review: a malformed payload is not silence", () => {
+describe("a malformed payload is not silence", () => {
   it("asks when the payload carries no command", async () => {
     const result = await runHook(
       "flag-probe",
@@ -365,7 +365,7 @@ describe("round 1 of review: a malformed payload is not silence", () => {
   });
 });
 
-describe("round 2 of review", () => {
+describe("wrappers, getopts, usage text, and reads that do not count", () => {
   before(() => {
     const script = (name, body) => {
       writeFileSync(join(dir, name), body);

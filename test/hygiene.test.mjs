@@ -92,8 +92,8 @@ describe("nothing private leaks", () => {
     assert.deepEqual(hits, [], `every hit, not just the first:\n${hits.join("\n")}`);
   });
 
-  // A commit message is as public as a file, and no file scan reads it. Round 2 wrote a private
-  // word into one while describing this very test.
+  // A commit message is as public as a file, and no file scan reads it. One was once written with
+  // a private word in it, while describing this very test.
   it("no commit message names one either", () => {
     const log = execFileSync("git", ["log", "--format=%h%x00%B%x01"], { cwd: ROOT }).toString(
       "utf8",
@@ -218,7 +218,7 @@ describe("history", () => {
   // Contributors are welcome, so this checks WHAT an identity says, not who it is: no author or
   // committer carries a private word (a machine's name, a personal address). It once required
   // one fixed author, which every contributor's pull request and every merge in GitHub's UI
-  // would fail (round 2, Fable).
+  // would fail.
   it("no author or committer names a private machine or address", () => {
     const people = execFileSync("git", ["log", "--format=%an <%ae>%n%cn <%ce>"], { cwd: ROOT })
       .toString("utf8")
