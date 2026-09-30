@@ -4,7 +4,7 @@
 
 - **Node.js 20 or newer** on your PATH. The hooks are `node` scripts.
 - **git 2.26 or newer**, for RECOVERABLE. It reads each repository's filter drivers with `git config --show-scope`, which arrived in 2.26.
-- **Linux.** The end-to-end run was driven there. macOS is in the CI matrix, on Node 20, 22 and 24, and gets claimed when that matrix has run green. Not before. Windows is not claimed: RECOVERABLE's `find` dry run needs a POSIX `find`, and the tests need a POSIX shell.
+- **Linux or macOS.** The end-to-end run was driven on Linux. The full test suite runs green on both in CI, on Node 20, 22 and 24. Windows is not claimed: RECOVERABLE's `find` dry run needs a POSIX `find`, and the tests need a POSIX shell.
 
 ## From the marketplace
 
